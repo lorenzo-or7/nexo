@@ -44,7 +44,8 @@ export function AppShell({
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       {/* sidebar */}
-      <aside className="sticky top-0 hidden h-dvh p-3 lg:block">
+      {/* menu sempre no tom escuro da marca: contraste com o conteúdo no modo claro */}
+      <aside data-theme="dark" className="sticky top-0 hidden h-dvh p-3 text-ink lg:block">
         <div className="panel flex h-full flex-col rounded-[1.5rem] bg-sidebar px-4 py-6">
         <Link href="/" className="px-3" aria-label="NEXO, visão geral">
           <Logo />
