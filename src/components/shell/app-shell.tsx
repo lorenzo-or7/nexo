@@ -10,6 +10,8 @@ import { cn } from "@/lib/cn";
 import { useTheme } from "@/lib/theme/provider";
 import type { Theme } from "@/lib/theme/shared";
 import { NAV } from "./nav";
+import { QuickEntryButton } from "@/components/entries/entry-dialog";
+import type { QuickEntryData } from "@/lib/data/ledger";
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -19,11 +21,13 @@ export function AppShell({
   user,
   profileTheme,
   signOutAction,
+  quickEntry,
   children,
 }: {
   user: { name: string; email: string };
   profileTheme: Theme | null;
   signOutAction?: () => Promise<void>;
+  quickEntry?: QuickEntryData;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -44,7 +48,8 @@ export function AppShell({
         <Link href="/" className="px-3" aria-label="NEXO, visão geral">
           <Logo />
         </Link>
-        <nav aria-label="Principal" className="mt-10 grid gap-1">
+        {quickEntry && <div className="mt-8 px-1"><QuickEntryButton data={quickEntry} variant="sidebar" /></div>}
+        <nav aria-label="Principal" className={cn("grid gap-1", quickEntry ? "mt-6" : "mt-10")}>
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -92,6 +97,8 @@ export function AppShell({
 
         <main className="w-full max-w-[1520px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">{children}</main>
       </div>
+
+      {quickEntry && <QuickEntryButton data={quickEntry} variant="fab" />}
 
       {/* navegação inferior no celular */}
       <nav

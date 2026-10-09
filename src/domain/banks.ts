@@ -67,3 +67,12 @@ export const CARD_BRANDS = [
 export function brandLabel(key: string): string {
   return CARD_BRANDS.find((b) => b.key === key)?.label ?? "";
 }
+
+export const ACCOUNT_TYPES = [
+  { key: "checking", label: "Conta corrente" },
+  { key: "digital", label: "Conta digital" },
+  { key: "savings", label: "Poupança" },
+  { key: "cash", label: "Dinheiro em espécie" },
+  { key: "investment", label: "Investimento" },
+  { key: "other", label: "Outra" },
+] as const;

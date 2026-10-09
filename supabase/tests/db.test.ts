@@ -340,3 +340,64 @@ describe("perfil garantido", () => {
     expect(n.n).toBe(5);
   });
 });
+
+describe("Etapa 2: contas e lançamentos", () => {
+  it("conta sem lançamentos é excluída; com histórico é arquivada", async () => {
+    const empty = await newAccount(ALICE, "Vazia E2", 0);
+    const used = await newAccount(ALICE, "Usada E2", 1000);
+    await as(ALICE, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on) values ($1, 'expense', 'confirmed', -100, '2026-10-02')`, [used]));
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_account($1) r`, [empty]))).r).toBe("deleted");
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_account($1) r`, [used]))).r).toBe("archived");
+    await expect(as(BOB, () => q(`select remove_account($1)`, [used]))).rejects.toThrow(/não encontrada/);
+  });
+
+  it("excluir lançamento é controlado (some do saldo, fica na auditoria)", async () => {
+    const acc = await newAccount(ALICE, "Exclusão", 1000);
+    const { id } = await as(ALICE, () => one<{ id: string }>(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on) values ($1, 'expense', 'confirmed', -300, '2026-10-02') returning id`, [acc]));
+    expect(await balance(ALICE, acc)).toBe(700);
+    await as(ALICE, () => q(`select delete_entry($1)`, [id]));
+    expect(await balance(ALICE, acc)).toBe(1000);
+    const audit = await as(ALICE, () => q(`select 1 from audit_log where row_id = $1 and action = 'update'`, [id]));
+    expect(audit.length).toBeGreaterThan(0);
+    await expect(as(ALICE, () => q(`select delete_entry($1)`, [id]))).rejects.toThrow(/não encontrado/);
+  });
+
+  it("excluir um lado da transferência apaga os dois", async () => {
+    const a = await newAccount(ALICE, "TA", 1000);
+    const b = await newAccount(ALICE, "TB", 0);
+    await as(ALICE, () => q(`select create_transfer($1, $2, 400, '2026-10-02')`, [a, b]));
+    const side = await as(ALICE, () => one<{ id: string }>(`select id from account_entries where account_id = $1`, [b]));
+    await as(ALICE, () => q(`select delete_entry($1)`, [side.id]));
+    expect(await balance(ALICE, a)).toBe(1000);
+    expect(await balance(ALICE, b)).toBe(0);
+  });
+
+  it("edit_transfer troca contas e valor mantendo o consolidado", async () => {
+    const a = await newAccount(ALICE, "EA", 1000);
+    const b = await newAccount(ALICE, "EB", 0);
+    const c = await newAccount(ALICE, "EC", 0);
+    const { id } = await as(ALICE, () => one<{ id: string }>(`select create_transfer($1, $2, 400, '2026-10-02') as id`, [a, b]));
+    await as(ALICE, () => q(`select edit_transfer($1, $2, $3, 250, '2026-10-03', 'confirmed', 'ajuste')`, [id, a, c]));
+    expect(await balance(ALICE, a)).toBe(750);
+    expect(await balance(ALICE, b)).toBe(0);
+    expect(await balance(ALICE, c)).toBe(250);
+    await expect(as(ALICE, () => q(`select edit_transfer($1, $2, $3, 250, '2026-10-03', 'confirmed', null, 1)`, [id, a, c]))).rejects.toThrow(/outra sessão/);
+  });
+
+  it("confirm_entry marca como realizado e passa a contar no saldo", async () => {
+    const acc = await newAccount(ALICE, "Confirma", 0);
+    const { id } = await as(ALICE, () => one<{ id: string }>(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on) values ($1, 'income', 'expected', 5000, '2026-10-20') returning id`, [acc]));
+    expect(await balance(ALICE, acc)).toBe(0);
+    await as(ALICE, () => q(`select confirm_entry($1, '2026-10-09')`, [id]));
+    expect(await balance(ALICE, acc)).toBe(5000);
+  });
+
+  it("tags: cria, substitui e não duplica", async () => {
+    const acc = await newAccount(ALICE, "Tags", 0);
+    const { id } = await as(ALICE, () => one<{ id: string }>(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on) values ($1, 'expense', 'confirmed', -100, '2026-10-02') returning id`, [acc]));
+    await as(ALICE, () => q(`select set_entry_tags($1, $2)`, [id, ["viagem", " lazer ", "viagem"]]));
+    await as(ALICE, () => q(`select set_entry_tags($1, $2)`, [id, ["lazer", "pokémon"]]));
+    const tags = await as(ALICE, () => q<{ name: string }>(`select t.name from entry_tags et join tags t on t.id = et.tag_id where et.entry_id = $1 order by t.name`, [id]));
+    expect(tags.map((t) => t.name)).toEqual(["lazer", "pokémon"]);
+  });
+});

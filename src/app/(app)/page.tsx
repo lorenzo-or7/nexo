@@ -35,11 +35,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Panel className="max-w-2xl">
           <h2 className="text-xl font-semibold tracking-tight">Tudo zerado, pronto para começar</h2>
           <p className="mt-2 text-ink-2">
-            Esta tela mostra só os seus dados reais. Comece adicionando seus cartões, com o dia de fechamento e de vencimento de cada um.
+            Esta tela mostra só os seus dados reais. Comece pelas contas, com o saldo de hoje, e depois os cartões, com o dia de fechamento e de vencimento.
           </p>
-          <Button asChild className="mt-6">
-            <Link href="/cartoes?novo=1"><Plus />Adicionar cartão</Link>
-          </Button>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild>
+              <Link href="/contas?nova=1"><Plus />Cadastrar conta</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/cartoes?novo=1"><Plus />Adicionar cartão</Link>
+            </Button>
+          </div>
         </Panel>
       }
     />
