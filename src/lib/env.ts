@@ -5,7 +5,11 @@ import { z } from "zod";
  * os novos, de "Publishable key" (sb_publishable_...). As duas funcionam.
  * Lidas de forma literal para o Next embutir os valores no navegador.
  */
-export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+// aceita a URL copiada com "/rest/v1/" ou barra no final
+export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+  .trim()
+  .replace(/\/(rest|auth)\/v1\/?$/, "")
+  .replace(/\/+$/, "");
 export const SUPABASE_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "").trim();
 
 const publicSchema = z.object({
