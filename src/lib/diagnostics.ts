@@ -117,6 +117,7 @@ export async function runDiagnostics(): Promise<Check[]> {
     { file: "20261009000500_card_images.sql", run: () => sb.rpc("remove_card", { p_card: "00000000-0000-0000-0000-000000000000" }) },
     { file: "20261009000600_ensure_profile.sql", run: () => sb.rpc("ensure_profile") },
     { file: "20261009000700_accounts_entries.sql", run: () => sb.rpc("delete_entry", { p_entry: "00000000-0000-0000-0000-000000000000" }) },
+    { file: "20261009000800_delete_purchase.sql", run: () => sb.rpc("delete_purchase", { p_purchase: "00000000-0000-0000-0000-000000000000" }) },
   ];
   const missing: string[] = [];
   // sem erro ao ler como anônimo = o arquivo de segurança (RLS) não foi aplicado
@@ -133,7 +134,7 @@ export async function runDiagnostics(): Promise<Check[]> {
   }
   checks.push(
     missing.length === 0
-      ? { id: "migrations", title: "Tabelas do NEXO no banco", status: "ok", detail: "As 7 migrations foram aplicadas." }
+      ? { id: "migrations", title: "Tabelas do NEXO no banco", status: "ok", detail: "As 8 migrations foram aplicadas." }
       : {
           id: "migrations",
           title: "Tabelas do NEXO no banco",

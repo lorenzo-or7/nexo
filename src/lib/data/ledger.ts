@@ -89,6 +89,8 @@ export interface EntryRow {
   transfer: { id: string; fromId: string; toId: string; amount: Cents } | null;
   cardId: string | null;
   invoiceRef: string | null;
+  /** compra no cartão de crédito (não mexe no saldo da conta) */
+  purchase?: { installments: number; firstInvoiceRef: string | null; status: string } | null;
 }
 
 export interface EntryFilters {
@@ -196,6 +198,45 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       cardId: r.card_id,
       invoiceRef: r.invoice_ref,
     });
+  }
+  // compras no crédito do mês: entram como despesa (pela data da compra), mas não saem da conta
+  const wantsPurchases = !f.accountId && (!f.kind || f.kind === "expense");
+  if (wantsPurchases) {
+    let pq = supabase
+      .from("purchases")
+      .select("id,version,card_id,description,category_id,purchased_on,total_cents,installment_count,first_invoice_ref,notes,status")
+      .is("deleted_at", null)
+      .gte("purchased_on", from)
+      .lte("purchased_on", to)
+      .limit(1000);
+    if (f.categoryId) {
+      const ids = [f.categoryId, ...categories.filter((c) => c.parentId === f.categoryId).map((c) => c.id)];
+      pq = pq.in("category_id", ids);
+    }
+    if (f.q) pq = pq.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
+    const { data: purchases, error: pErr } = await pq;
+    if (pErr) throw new Error(`Falha ao carregar compras no cartão: ${pErr.message}`);
+    for (const p of purchases ?? []) {
+      out.push({
+        id: p.id,
+        version: p.version,
+        date: p.purchased_on,
+        kind: "expense",
+        status: "confirmed",
+        amount: -Number(p.total_cents) as Cents,
+        description: p.description,
+        accountId: "",
+        categoryId: p.category_id,
+        paymentMethod: "credit",
+        notes: p.notes,
+        tags: [],
+        transfer: null,
+        cardId: p.card_id,
+        invoiceRef: p.first_invoice_ref,
+        purchase: { installments: p.installment_count, firstInvoiceRef: p.first_invoice_ref, status: p.status },
+      });
+    }
+    out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }
   return out;
 }

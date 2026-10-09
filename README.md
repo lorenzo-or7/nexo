@@ -26,7 +26,7 @@ O **motor financeiro** (`src/domain`) e o **banco** (`supabase/migrations`) já 
    npx supabase link --project-ref <ref>
    npx supabase db push
    ```
-   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. São 7 arquivos; um deles cria o bucket privado `card-images` (logos e imagens dos cartões).
+   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. São 8 arquivos; um deles cria o bucket privado `card-images` (logos e imagens dos cartões).
 2. Em **Authentication → URL Configuration**, adicione `http://localhost:3000/auth/confirm` às Redirect URLs. Nos templates de e-mail de confirmação e recuperação, use o link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}`.
 3. `cp .env.example .env.local` e preencha as chaves. A `SUPABASE_SERVICE_ROLE_KEY` só é usada no servidor (exclusão de conta) e nunca vai ao navegador.
 4. `npm install && npm run dev` (usa o Turbopack: a primeira abertura de cada página compila em poucos segundos; as seguintes são instantâneas).

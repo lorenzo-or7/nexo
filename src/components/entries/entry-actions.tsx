@@ -33,7 +33,7 @@ export function ConfirmEntryButton({ id }: { id: string }) {
   );
 }
 
-export function DeleteEntryButton({ id, label, isTransfer }: { id: string; label: string; isTransfer: boolean }) {
+export function DeleteEntryButton({ id, label, isTransfer, isPurchase = false }: { id: string; label: string; isTransfer: boolean; isPurchase?: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<EntryActionResult, FormData>(deleteEntry, undefined);
   useResult(state, () => setOpen(false));
@@ -47,9 +47,14 @@ export function DeleteEntryButton({ id, label, isTransfer }: { id: string; label
       <DialogContent title="Excluir lançamento?" className="[--dialog-w:440px]">
         <form action={action} className="grid gap-5 p-5 sm:p-6">
           <input type="hidden" name="id" value={id} />
+          {isPurchase && <input type="hidden" name="source" value="card" />}
           {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
           <p className="text-ink-2">
-            <strong className="font-semibold text-ink">{label}</strong> sai do saldo e dos relatórios.
+            {isPurchase ? (
+              <><strong className="font-semibold text-ink">{label}</strong> sai das faturas do cartão, inclusive as parcelas futuras.</>
+            ) : (
+              <><strong className="font-semibold text-ink">{label}</strong> sai do saldo e dos relatórios.</>
+            )}
             {isTransfer ? " Os dois lados da transferência são excluídos juntos." : ""} A exclusão fica registrada no histórico de alterações.
           </p>
           <div className="flex justify-end gap-3">

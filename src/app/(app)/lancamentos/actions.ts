@@ -194,6 +194,12 @@ export async function deleteEntry(_: EntryActionResult, form: FormData): Promise
   const id = uuid.safeParse(form.get("id"));
   if (!id.success) return { ok: false, error: "Lançamento inválido." };
   const { supabase } = await requireUser();
+  if (form.get("source") === "card") {
+    const { error } = await supabase.rpc("delete_purchase", { p_purchase: id.data });
+    if (error) return { ok: false, error: "Não foi possível excluir a compra." };
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Compra excluída. As parcelas saíram das faturas." };
+  }
   const { error } = await supabase.rpc("delete_entry", { p_entry: id.data });
   if (error) return { ok: false, error: "Não foi possível excluir o lançamento." };
   revalidatePath("/", "layout");

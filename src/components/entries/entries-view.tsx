@@ -30,6 +30,7 @@ function monthLabel(m: string) {
 }
 
 function iconFor(e: EntryRow) {
+  if (e.purchase) return CreditCard;
   if (e.transfer) return ArrowLeftRight;
   if (e.kind === "invoice_payment") return CreditCard;
   if (e.kind === "adjustment") return Scale;
@@ -53,6 +54,8 @@ export function EntriesView({
 }) {
   const accountName = new Map(data.accounts.map((a) => [a.id, a.name]));
   const accountColor = new Map(data.accounts.map((a) => [a.id, a.color]));
+  const cardName = new Map(data.cards.map((c) => [c.id, c.name]));
+  const cardColor = new Map(data.cards.map((c) => [c.id, c.color]));
   const category = new Map(data.categories.map((c) => [c.id, c]));
   const catLabel = (id: string | null) => {
     if (!id) return null;
@@ -119,16 +122,20 @@ export function EntriesView({
                       const Icon = iconFor(e);
                       const isTransfer = Boolean(e.transfer);
                       const title = e.description || (isTransfer ? "Transferência" : catLabel(e.categoryId)?.split(" › ").pop()) || (e.kind === "adjustment" ? "Ajuste de saldo" : e.kind === "income" ? "Receita" : "Despesa");
-                      const editable = !["adjustment", "invoice_payment"].includes(e.kind);
+                      const isPurchase = Boolean(e.purchase);
+                      const editable = !isPurchase && !["adjustment", "invoice_payment"].includes(e.kind);
                       const meta = isTransfer
                         ? `${accountName.get(e.transfer!.fromId) ?? "?"} → ${accountName.get(e.transfer!.toId) ?? "?"}`
-                        : [accountName.get(e.accountId), catLabel(e.categoryId)].filter(Boolean).join(" · ");
+                        : isPurchase
+                          ? [cardName.get(e.cardId!) ?? "Cartão", e.purchase!.installments > 1 ? `${e.purchase!.installments}x` : "à vista", catLabel(e.categoryId)].filter(Boolean).join(" · ")
+                          : [accountName.get(e.accountId), catLabel(e.categoryId)].filter(Boolean).join(" · ");
+                      const dot = isPurchase ? cardColor.get(e.cardId!) : accountColor.get(e.accountId);
                       const display = isTransfer && !filters.accountId ? e.transfer!.amount : e.amount;
                       const content = (
                         <>
                           <span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">
                             <Icon className="size-[18px]" />
-                            {!isTransfer && <span aria-hidden className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface" style={{ backgroundColor: accountColor.get(e.accountId) }} />}
+                            {!isTransfer && <span aria-hidden className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface" style={{ backgroundColor: dot }} />}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[0.9375rem] font-medium">{title}</span>
@@ -139,6 +146,8 @@ export function EntriesView({
                                   {e.date < data.today ? "Atrasado" : STATUS_LABEL[e.status]}
                                 </span>
                               )}
+                              {isPurchase && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink-2">Crédito</span>}
+                              {e.purchase?.status === "refunded" && <span className="rounded-full bg-positive-soft px-2 py-0.5 text-positive">Estornada</span>}
                               {e.tags.map((t) => <span key={t} className="rounded-full bg-accent-soft px-2 py-0.5 text-accent">{t}</span>)}
                             </span>
                           </span>
@@ -161,7 +170,7 @@ export function EntriesView({
                             <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">{content}</div>
                           )}
                           {e.status !== "confirmed" && <ConfirmEntryButton id={e.id} />}
-                          <DeleteEntryButton id={e.id} label={title} isTransfer={isTransfer} />
+                          <DeleteEntryButton id={e.id} label={title} isTransfer={isTransfer} isPurchase={isPurchase} />
                         </li>
                       );
                     })}
@@ -181,7 +190,7 @@ export function EntriesView({
               {refunds > 0 && <div className="flex justify-between"><dt className="text-ink-2">Reembolsos</dt><dd><Money value={refunds} className="font-semibold" /></dd></div>}
               <div className="flex justify-between border-t border-border pt-3"><dt className="font-medium">Resultado</dt><dd><Money value={(income + refunds - expenses) as Cents} tone="flow" signed className="font-semibold" /></dd></div>
             </dl>
-            <p className="text-xs text-ink-3">Só o que já aconteceu. Transferências entre suas contas não entram.</p>
+            <p className="text-xs text-ink-3">Só o que já aconteceu. Compras no crédito contam pela data da compra; transferências entre suas contas e pagamentos de fatura não entram.</p>
           </Panel>
           {pendingCount > 0 && filters.kind !== "pending" && (
             <Link href={`${basePath}?tipo=pending`} className="rounded-[var(--radius-card)] border border-dashed border-border-strong px-5 py-4 text-sm text-ink-2 hover:border-accent hover:text-ink">

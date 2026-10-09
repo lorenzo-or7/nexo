@@ -401,3 +401,17 @@ describe("Etapa 2: contas e lançamentos", () => {
     expect(tags.map((t) => t.name)).toEqual(["lazer", "pokémon"]);
   });
 });
+
+describe("excluir compra no cartão", () => {
+  it("cancela as parcelas e tira a compra das faturas", async () => {
+    const card = await as(ALICE, async () => (await one<{ id: string }>(`insert into cards (name, closing_day, due_day) values ('Del', 13, 20) returning id`)).id);
+    const pid = (await as(ALICE, () => one<{ id: string }>(`select create_credit_purchase($1, 'X', null, '2026-10-05', 3000, $2::jsonb) as id`, [
+      card, JSON.stringify([1, 2, 3].map((n, i) => ({ number: n, invoice_ref: ["2026-10", "2026-11", "2026-12"][i], amount_cents: 1000 }))),
+    ]))).id;
+    await as(ALICE, () => q(`select delete_purchase($1)`, [pid]));
+    const live = await as(ALICE, () => q(`select 1 from card_charges where purchase_id = $1 and cancelled_at is null`, [pid]));
+    expect(live).toHaveLength(0);
+    await expect(as(ALICE, () => q(`select delete_purchase($1)`, [pid]))).rejects.toThrow(/não encontrada/);
+    await expect(as(BOB, () => q(`select delete_purchase($1)`, [pid]))).rejects.toThrow(/não encontrada/);
+  });
+});

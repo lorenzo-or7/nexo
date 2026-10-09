@@ -38,11 +38,11 @@ test("transferência aparece como uma linha só, sem cor de receita/despesa", as
   await expect(page.getByText("Nubank → Santander")).toHaveCount(1);
 });
 
-test("resumo do mês ignora pendentes e transferências", async ({ page }) => {
+test("resumo do mês ignora pendentes e transferências e inclui compras no crédito", async ({ page }) => {
   await page.goto("/dev/preview/lancamentos");
   const resumo = page.getByRole("complementary");
   await expect(resumo.getByText("R$ 812,68")).toBeVisible(); // só o salário realizado
-  await expect(resumo.getByText("R$ 111,40")).toBeVisible(); // 87,90 + 23,50
+  await expect(resumo.getByText("R$ 411,40")).toBeVisible(); // 87,90 + 23,50 + compra no crédito de 300,00
 });
 
 test("contas: total, ajustar saldo e nova conta", async ({ page }) => {
@@ -83,4 +83,12 @@ test("receita não oferece crédito", async ({ page }) => {
   await dialog.getByRole("combobox", { name: "Forma de recebimento" }).click();
   await expect(page.getByRole("option", { name: "Pix" })).toBeVisible();
   await expect(page.getByRole("option", { name: /Crédito/ })).toHaveCount(0);
+});
+
+test("compra no crédito aparece no extrato e só pode ser excluída", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await expect(page.getByText("Nubank Ultravioleta · 3x · Despesas gerais")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar Booster box" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Excluir Booster box" }).click();
+  await expect(page.getByRole("dialog")).toContainText("sai das faturas do cartão");
 });
