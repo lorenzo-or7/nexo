@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
-import { DemoLoader } from "@/components/settings/forms";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/card";
 import { buildDashboard } from "@/domain/dashboard";
 import { loadDashboardInput, loadProfile } from "@/lib/data/finance";
@@ -32,12 +33,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       }
       emptyState={
         <Panel className="max-w-2xl">
-          <h2 className="text-xl font-semibold tracking-tight">Seu NEXO ainda está vazio</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Tudo zerado, pronto para começar</h2>
           <p className="mt-2 text-ink-2">
-            Assim que você cadastrar contas e cartões, esta tela mostra seu saldo real, as faturas, os próximos vencimentos e quanto dá para gastar sem entrar no vermelho.
-            Para ver tudo funcionando agora, carregue a demonstração.
+            Esta tela mostra só os seus dados reais. Comece adicionando seus cartões, com o dia de fechamento e de vencimento de cada um.
           </p>
-          <div className="mt-6"><DemoLoader /></div>
+          <Button asChild className="mt-6">
+            <Link href="/cartoes?novo=1"><Plus />Adicionar cartão</Link>
+          </Button>
         </Panel>
       }
     />

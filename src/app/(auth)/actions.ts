@@ -27,6 +27,12 @@ function notConfigured(): FormState {
 
 function translate(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("fetch failed") || m.includes("network") || m.includes("enotfound") || m.includes("econnrefused"))
+    return "Não foi possível conectar ao Supabase. Confira a URL no .env.local, sua internet e se o projeto não está pausado.";
+  if (m.includes("invalid api key") || m.includes("no api key")) return "A chave do Supabase no .env.local está incorreta.";
+  if (m.includes("database error")) return "O banco recusou o cadastro. Provavelmente faltam migrations: abra /diagnostico para conferir.";
+  if (m.includes("signups not allowed") || m.includes("signup is disabled")) return "Novos cadastros estão desativados no projeto Supabase.";
+  if (m.includes("email address") && m.includes("invalid")) return "O Supabase recusou este e-mail. Use um endereço real.";
   if (m.includes("invalid login")) return "E-mail ou senha incorretos.";
   if (m.includes("email not confirmed")) return "Confirme seu e-mail pelo link que enviamos antes de entrar.";
   if (m.includes("already registered")) return "Já existe uma conta com este e-mail.";

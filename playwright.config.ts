@@ -15,5 +15,5 @@ export default defineConfig({
   ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : { command: "npx next dev -p 3100", url: "http://localhost:3100/entrar", reuseExistingServer: true, timeout: 180_000 },
+    : { command: "NEXO_DEV_PREVIEW=1 npx next dev --turbopack -p 3100", url: "http://localhost:3100/entrar", reuseExistingServer: true, timeout: 180_000 },
 });

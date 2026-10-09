@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isPreviewEnabled } from "@/lib/env";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { AppShell } from "@/components/shell/app-shell";
 import { Panel } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import type { Cents } from "@/domain/money";
  * cenário demonstrativo em memória, sem Supabase. Retorna 404 em produção.
  */
 export default async function Preview({ searchParams }: { searchParams: Promise<{ h?: string; vazio?: string }> }) {
-  if (process.env.NODE_ENV === "production") notFound();
+  if (!isPreviewEnabled()) notFound();
   const sp = await searchParams;
   const horizon = (["30", "60", "90"].includes(sp.h ?? "") ? sp.h : "month") as "month" | "30" | "60" | "90";
   const base = demoScenario({ balanceAccountName: "Conta principal" });

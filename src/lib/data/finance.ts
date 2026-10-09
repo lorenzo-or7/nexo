@@ -34,6 +34,12 @@ async function must<T>(p: PromiseLike<{ data: T | null; error: { message: string
 
 /** Perfil do usuário — buscado uma vez por requisição, mesmo se layout e página pedirem. */
 export const loadProfile = cache(async (supabase: SupabaseClient): Promise<Profile> => {
+  const first = await supabase.from("profiles").select("*").maybeSingle();
+  if (first.error) throw new Error(`Falha ao carregar o perfil: ${first.error.message}`);
+  if (first.data) return first.data as Profile;
+  // conta criada antes das tabelas existirem: cria o perfil agora
+  const { error } = await supabase.rpc("ensure_profile");
+  if (error) throw new Error(`Falha ao criar o perfil: ${error.message}`);
   return must(supabase.from("profiles").select("*").single());
 });
 

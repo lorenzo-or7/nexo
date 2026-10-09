@@ -324,3 +324,19 @@ describe("cartões: excluir ou arquivar", () => {
     await expect(as(ALICE, () => q(`insert into cards (name, closing_day, due_day, institution_key) values ('x', 3, 10, 'Nu Bank!')`))).rejects.toThrow(/check/);
   });
 });
+
+describe("perfil garantido", () => {
+  it("ensure_profile cria perfil e categorias para quem ficou sem", async () => {
+    const orphan = "44444444-4444-4444-8444-444444444444";
+    await db.exec("alter table auth.users disable trigger on_auth_user_created");
+    await db.query(`insert into auth.users (id, email) values ($1, 'orfao@nexo.test')`, [orphan]);
+    await db.exec("alter table auth.users enable trigger on_auth_user_created");
+    expect(await as(orphan, () => q(`select 1 from profiles`))).toHaveLength(0);
+    await as(orphan, () => q(`select ensure_profile()`));
+    await as(orphan, () => q(`select ensure_profile()`)); // idempotente
+    const p = await as(orphan, () => one<{ display_name: string }>(`select display_name from profiles`));
+    expect(p.display_name).toBe("orfao");
+    const n = await as(orphan, () => one<{ n: number }>(`select count(*)::int n from categories where parent_id is null`));
+    expect(n.n).toBe(5);
+  });
+});

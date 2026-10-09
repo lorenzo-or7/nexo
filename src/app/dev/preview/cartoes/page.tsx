@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isPreviewEnabled } from "@/lib/env";
 import { CardsView } from "@/components/cards/cards-view";
 import { AppShell } from "@/components/shell/app-shell";
 import type { Cents } from "@/domain/money";
@@ -6,7 +7,7 @@ import type { CardListItem } from "@/lib/data/cards";
 
 /** Pré-visualização da tela de cartões (somente em desenvolvimento, sem Supabase). */
 export default async function Preview({ searchParams }: { searchParams: Promise<{ novo?: string; vazio?: string }> }) {
-  if (process.env.NODE_ENV === "production") notFound();
+  if (!isPreviewEnabled()) notFound();
   const sp = await searchParams;
   const base = {
     nickname: null, limitRule: "full_amount" as const, closingDayRule: "next_invoice" as const,

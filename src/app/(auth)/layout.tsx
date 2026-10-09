@@ -1,5 +1,7 @@
 import Image from "next/image";
+import Link from "next/link";
 import { CoinToggle } from "@/components/brand/coin-toggle";
+import { SetupGuide } from "@/components/setup/setup-guide";
 import { isSupabaseConfigured } from "@/lib/env";
 
 /** Assinatura completa da marca: símbolo, logotipo e slogan — como na identidade enviada. */
@@ -57,10 +59,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="mb-10 lg:hidden">
             <BrandLockup size="sm" />
           </div>
-          {children}
-          {!isSupabaseConfigured() && (
-            <p role="status" className="mt-8 rounded-xl border border-dashed border-border-strong px-4 py-3 text-xs leading-relaxed text-ink-3">
-              Login desativado neste ambiente: falta configurar o Supabase no arquivo <code className="text-ink-2">.env.local</code>.
+          {isSupabaseConfigured() ? children : <SetupGuide />}
+          {isSupabaseConfigured() && process.env.NODE_ENV !== "production" && (
+            <p className="mt-8 text-center text-sm text-ink-3">
+              Algo não funciona? <Link href="/diagnostico" className="font-medium text-accent underline-offset-4 hover:underline">Verificar a configuração</Link>
             </p>
           )}
         </div>

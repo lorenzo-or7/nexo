@@ -26,7 +26,7 @@ O **motor financeiro** (`src/domain`) e o **banco** (`supabase/migrations`) já 
    npx supabase link --project-ref <ref>
    npx supabase db push
    ```
-   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. A última migration cria o bucket privado `card-images` (logos e imagens dos cartões).
+   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. São 6 arquivos; um deles cria o bucket privado `card-images` (logos e imagens dos cartões).
 2. Em **Authentication → URL Configuration**, adicione `http://localhost:3000/auth/confirm` às Redirect URLs. Nos templates de e-mail de confirmação e recuperação, use o link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}`.
 3. `cp .env.example .env.local` e preencha as chaves. A `SUPABASE_SERVICE_ROLE_KEY` só é usada no servidor (exclusão de conta) e nunca vai ao navegador.
 4. `npm install && npm run dev` (usa o Turbopack: a primeira abertura de cada página compila em poucos segundos; as seguintes são instantâneas).
@@ -41,7 +41,9 @@ O NEXO não traz as logos oficiais dos bancos embutidas. Em **Cartões → Adici
 
 As imagens (PNG, JPG ou WebP, até 2 MB) ficam no Supabase Storage, numa pasta visível só para você. Sem imagem, o cartão usa as cores da instituição escolhida.
 
-Sem Supabase configurado, as telas de login mostram um aviso e `/dev/preview` (somente em desenvolvimento) renderiza o dashboard com o cenário demonstrativo em memória.
+Sem Supabase configurado, a tela de login mostra o passo a passo de configuração. A página **/diagnostico** confere cada item (chaves, conexão, migrations, confirmação de e-mail, chave secreta e bucket) e diz o que corrigir.
+
+O site real começa zerado. A prévia com dados fictícios (`/dev/preview`) só existe em desenvolvimento com `NEXO_DEV_PREVIEW=1` e é usada pelos testes de tela.
 
 ## Testes
 

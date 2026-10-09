@@ -1,15 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { SUPABASE_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev"];
+const PUBLIC_PATHS = ["/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev", "/diagnostico"];
 
 export async function middleware(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = SUPABASE_URL;
+  const key = SUPABASE_KEY;
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  if (!url || !key) {
+  if (!isSupabaseConfigured()) {
     // sem configuração: só as páginas públicas funcionam (exibem o aviso de configuração)
     if (isPublic) return NextResponse.next();
     return NextResponse.redirect(new URL("/entrar", request.url));
