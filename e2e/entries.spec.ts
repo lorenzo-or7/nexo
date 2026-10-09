@@ -107,3 +107,38 @@ test("extrato mostra todos os meses; filtro de mês é opcional", async ({ page 
   await page.getByRole("button", { name: "Limpar filtros" }).click();
   await expect(page).not.toHaveURL(/mes=/);
 });
+
+test("valor com casas decimais automáticas", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  const amount = page.getByRole("dialog").getByLabel("Valor");
+  await amount.pressSequentially("5001");
+  await expect(amount).toHaveValue("50,01");
+  await amount.press("Backspace");
+  await expect(amount).toHaveValue("5,00");
+});
+
+test("compra no crédito que outra pessoa vai pagar: valor e data sugeridos", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  const d = page.getByRole("dialog", { name: "Novo lançamento" });
+  await d.getByLabel("Valor").pressSequentially("12000");
+  await d.getByRole("combobox", { name: "Forma de pagamento" }).click();
+  await page.getByRole("option", { name: /Crédito/ }).click();
+  await d.getByRole("switch", { name: "Outra pessoa vai me pagar" }).click();
+  await expect(d.getByLabel("Quanto")).toHaveValue("120,00");
+  await expect(d.getByLabel("Quando vai pagar")).toHaveValue("2026-10-20"); // vencimento da fatura
+  await expect(d.locator("input[name=reimb_account]")).toHaveValue("00000000-0000-4000-8000-0000000000a1"); // conta que paga o cartão
+  await d.getByLabel("Quanto").fill("40,00");
+  await expect(d.getByRole("button", { name: "Valor total" })).toBeVisible();
+});
+
+test("extrato: quem vai pagar aparece na compra, no reembolso e no resumo", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await expect(page.getByText("Ana paga R$ 150,00")).toBeVisible();
+  await expect(page.getByText("Reembolso · Ana")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vão te pagar" })).toBeVisible();
+  await page.getByRole("button", { name: "Alguém vai pagar Booster box" }).click();
+  const d = page.getByRole("dialog", { name: "Alguém vai pagar" });
+  await expect(d.getByLabel("Quanto")).toHaveValue("150,00"); // 300,00 − 150,00 já combinados
+});

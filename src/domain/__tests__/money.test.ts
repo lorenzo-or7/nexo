@@ -56,3 +56,33 @@ describe("[15] precisão monetária", () => {
     expect(formatBRL(81268, { signed: true })).toBe("+R$ 812,68");
   });
 });
+
+import { centsToInput, maskMoneyInput } from "../money";
+
+describe("máscara de digitação de valores", () => {
+  it("dígitos entram pela direita com 2 casas", () => {
+    expect(maskMoneyInput("5")).toBe("0,05");
+    expect(maskMoneyInput("50")).toBe("0,50");
+    expect(maskMoneyInput("5001")).toBe("50,01");
+    expect(maskMoneyInput("123456")).toBe("1.234,56");
+    expect(maskMoneyInput("100000000")).toBe("1.000.000,00");
+  });
+  it("aceita colar texto formatado e apagar dígitos", () => {
+    expect(maskMoneyInput("R$ 1.234,56")).toBe("1.234,56");
+    expect(maskMoneyInput("50,0")).toBe("5,00"); // apagou o último dígito de 50,01
+    expect(maskMoneyInput("0,0")).toBe("");
+    expect(maskMoneyInput("")).toBe("");
+  });
+  it("sinal negativo só quando permitido", () => {
+    expect(maskMoneyInput("-1250", true)).toBe("-12,50");
+    expect(maskMoneyInput("-1250", false)).toBe("12,50");
+    expect(maskMoneyInput("--1250", true)).toBe("12,50");
+  });
+  it("o texto mascarado volta para os mesmos centavos", () => {
+    for (const c of [1, 99, 100, 5001, 123456, 100000000]) {
+      expect(parseBRL(maskMoneyInput(String(c)))).toBe(c);
+    }
+    expect(centsToInput(-32112)).toBe("-321,12");
+    expect(centsToInput(0)).toBe("");
+  });
+});

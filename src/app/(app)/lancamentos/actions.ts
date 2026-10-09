@@ -59,12 +59,18 @@ export async function saveEntry(_: EntryActionResult, form: FormData): Promise<E
     return { ok: false, error: issue.message, field: String(issue.path[0] ?? "") };
   }
   const v = parsed.data;
+  const reimbRead = v.kind === "expense" && !v.id ? readReimbursement(form) : { on: false as const, error: null, data: null };
+  if (reimbRead.error) return { ok: false, error: reimbRead.error, field: "reimb" };
+  const reimbData = reimbRead.data;
+  if (reimbData && reimbData.amount > v.amount) {
+    return { ok: false, error: "A outra pessoa não pode pagar mais do que o valor da compra.", field: "reimb" };
+  }
   const { supabase } = await requireUser();
 
   // compra no crédito: vai para a fatura do cartão, não sai da conta agora
   if (v.kind === "expense" && v.payment_method === "credit") {
     if (v.id) return { ok: false, error: "Para mudar uma compra no crédito, use a tela do cartão." };
-    return saveCreditPurchase(supabase, v, form.get("again") === "1");
+    return saveCreditPurchase(supabase, v, form.get("again") === "1", reimbData);
   }
   if (!v.account_id) return { ok: false, error: "Escolha a conta.", field: "account_id" };
   const accountId = v.account_id;
@@ -144,6 +150,13 @@ export async function saveEntry(_: EntryActionResult, form: FormData): Promise<E
       revalidatePath("/", "layout");
       return { ok: false, error: "Lançamento salvo, mas as tags não foram gravadas." };
     }
+    if (!v.id && reimbData) {
+      const msg = await addReimbursementFor(supabase, { entryId }, reimbData, v.idempotency_key ? `${v.idempotency_key}:r` : null);
+      if (msg) {
+        revalidatePath("/", "layout");
+        return { ok: false, error: `Despesa registrada, mas: ${msg} Use "Alguém vai pagar" no extrato.` };
+      }
+    }
   }
 
   revalidatePath("/", "layout");
@@ -153,7 +166,62 @@ export async function saveEntry(_: EntryActionResult, form: FormData): Promise<E
 
 type Parsed = z.infer<typeof schema>;
 
-async function saveCreditPurchase(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], v: Parsed, again: boolean): Promise<EntryActionResult> {
+const reimbSchema = z.object({
+  counterparty: z.string().trim().min(1, "Informe quem vai pagar").max(60),
+  amount: z.string().transform((v, ctx) => {
+    try {
+      const c = parseBRL(v);
+      if (c <= 0) throw new Error();
+      return c;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "Informe quanto a pessoa vai pagar" });
+      return z.NEVER;
+    }
+  }),
+  date: z.string().refine(isValidDate, "Data do reembolso inválida"),
+  account_id: z.uuid("Escolha a conta que recebe o reembolso"),
+});
+
+/** Lê os campos "Outra pessoa vai me pagar" do formulário (prefixo reimb_). */
+function readReimbursement(form: FormData) {
+  if (form.get("reimb_on") !== "on") return { on: false as const, error: null, data: null };
+  const parsed = reimbSchema.safeParse({
+    counterparty: form.get("reimb_who"),
+    amount: String(form.get("reimb_amount") ?? ""),
+    date: form.get("reimb_date"),
+    account_id: form.get("reimb_account"),
+  });
+  if (!parsed.success) return { on: true as const, error: parsed.error.issues[0].message, data: null };
+  return { on: true as const, error: null, data: parsed.data };
+}
+
+async function addReimbursementFor(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  origin: { purchaseId?: string; entryId?: string },
+  r: z.infer<typeof reimbSchema>,
+  key: string | null,
+) {
+  const { error } = await supabase.rpc("add_reimbursement", {
+    p_purchase: origin.purchaseId ?? null,
+    p_entry: origin.entryId ?? null,
+    p_account: r.account_id,
+    p_amount_cents: r.amount,
+    p_date: r.date,
+    p_counterparty: r.counterparty,
+    p_status: "scheduled",
+    p_idempotency_key: key,
+  });
+  if (!error) return null;
+  if (error.message?.includes("passa do valor")) return "O reembolso não pode passar do valor da compra.";
+  return "Não foi possível registrar o reembolso.";
+}
+
+async function saveCreditPurchase(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  v: Parsed,
+  again: boolean,
+  reimb: z.infer<typeof reimbSchema> | null,
+): Promise<EntryActionResult> {
   if (!v.card_id) return { ok: false, error: "Escolha o cartão.", field: "card_id" };
   const [{ data: card }, { data: overrides }] = await Promise.all([
     supabase.from("cards").select("id,name,closing_day,due_day,closing_to_due_months,closing_day_rule").eq("id", v.card_id).is("archived_at", null).single(),
@@ -169,7 +237,7 @@ async function saveCreditPurchase(supabase: Awaited<ReturnType<typeof requireUse
   });
   // parcelas calculadas pelo motor; o banco confere a soma e a sequência das faturas
   const parts = buildInstallments(config, { purchaseId: "new", cardId: card.id, date: v.occurred_on, total: v.amount as Cents, installments: v.installments });
-  const { error } = await supabase.rpc("create_credit_purchase", {
+  const { data: purchaseId, error } = await supabase.rpc("create_credit_purchase", {
     p_card: card.id,
     p_description: v.description ?? "Compra no crédito",
     p_category: v.category_id,
@@ -181,6 +249,13 @@ async function saveCreditPurchase(supabase: Awaited<ReturnType<typeof requireUse
     p_idempotency_key: v.idempotency_key,
   });
   if (error) return { ok: false, error: friendly(error.code, "Não foi possível registrar a compra no crédito.") };
+  if (reimb && purchaseId) {
+    const msg = await addReimbursementFor(supabase, { purchaseId: purchaseId as string }, reimb, v.idempotency_key ? `${v.idempotency_key}:r` : null);
+    if (msg) {
+      revalidatePath("/", "layout");
+      return { ok: false, error: `Compra registrada, mas: ${msg} Use "Alguém vai pagar" no extrato.` };
+    }
+  }
   revalidatePath("/", "layout");
   const first = formatMonthBR(parts[0].invoiceRef);
   return {
@@ -220,4 +295,23 @@ export async function confirmEntry(_: EntryActionResult, form: FormData): Promis
   if (error) return { ok: false, error: "Não foi possível confirmar." };
   revalidatePath("/", "layout");
   return { ok: true, message: "Marcado como realizado." };
+}
+
+/** "Alguém vai pagar": cria o reembolso a receber para uma compra ou despesa já lançada. */
+export async function addReimbursement(_: EntryActionResult, form: FormData): Promise<EntryActionResult> {
+  const id = uuid.safeParse(form.get("origin_id"));
+  if (!id.success) return { ok: false, error: "Lançamento inválido." };
+  const parsed = reimbSchema.safeParse({
+    counterparty: form.get("reimb_who"),
+    amount: String(form.get("reimb_amount") ?? ""),
+    date: form.get("reimb_date"),
+    account_id: form.get("reimb_account"),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const { supabase } = await requireUser();
+  const isPurchase = form.get("origin_kind") === "card";
+  const msg = await addReimbursementFor(supabase, isPurchase ? { purchaseId: id.data } : { entryId: id.data }, parsed.data, String(form.get("idempotency_key") || "") || null);
+  if (msg) return { ok: false, error: msg };
+  revalidatePath("/", "layout");
+  return { ok: true, message: `${parsed.data.counterparty} vai te pagar. O valor entra na previsão.` };
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useToast } from "@/components/ui/toast";
 import { ACCOUNT_TYPES, BANKS, bankByKey } from "@/domain/banks";
 import type { LocalDate } from "@/domain/dates";
@@ -101,14 +102,14 @@ function AccountForm({ account, today, onDone }: { account?: EditableAccount; to
           </div>
         </Field>
         <Field label="Saldo inicial" htmlFor="opening_balance" error={errorFor("opening_balance_cents")}>
-          <Input id="opening_balance" name="opening_balance" inputMode="decimal" placeholder="0,00" defaultValue={account ? asInput(account.openingBalance) : ""} />
+          <MoneyInput id="opening_balance" name="opening_balance" allowNegative defaultValue={account ? asInput(account.openingBalance) : ""} />
         </Field>
         <Field label="Saldo no começo do dia" htmlFor="opening_date" error={errorFor("opening_date")}>
           <Input id="opening_date" name="opening_date" type="date" defaultValue={account?.openingDate ?? today} required />
         </Field>
       </div>
       <p className="text-sm text-ink-3">
-        Use o saldo que o banco mostrava no começo desse dia. Lançamentos a partir dessa data atualizam o saldo. Para valores negativos, use o sinal de menos.
+        Use o saldo que o banco mostrava no começo desse dia. Lançamentos a partir dessa data atualizam o saldo. Saldo negativo: digite o sinal de menos.
       </p>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onDone}>Cancelar</Button>
@@ -135,7 +136,7 @@ export function AdjustBalanceDialog({ id, name, balance }: { id: string; name: s
             O NEXO calcula <strong className="font-semibold text-ink">{formatBRL(balance)}</strong>. Digite o saldo que o banco mostra agora; a diferença vira um lançamento de ajuste com a data de hoje.
           </p>
           <Field label="Saldo no banco agora" htmlFor="target">
-            <Input id="target" name="target" inputMode="decimal" placeholder="0,00" autoFocus />
+            <MoneyInput id="target" name="target" allowNegative autoFocus />
           </Field>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>

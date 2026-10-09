@@ -119,3 +119,23 @@ export function mulDiv(value: Cents, numerator: number, denominator: number): Ce
   assertCents(out);
   return out as Cents;
 }
+
+/**
+ * Máscara de digitação "de caixa": os dígitos entram pela direita,
+ * com as duas casas decimais sempre presentes. 5 → "0,05", 5001 → "50,01".
+ * Um "-" em qualquer posição inverte o sinal (quando permitido).
+ */
+export function maskMoneyInput(raw: string, allowNegative = false): string {
+  const negative = allowNegative && (raw.match(/-/g)?.length ?? 0) % 2 === 1;
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "").slice(0, 13);
+  if (!digits) return negative ? "-" : "";
+  const padded = digits.padStart(3, "0");
+  const int = padded.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${negative ? "-" : ""}${int},${padded.slice(-2)}`;
+}
+
+/** Centavos → texto do campo ("1.234,56"), sem o "R$". */
+export function centsToInput(value: number): string {
+  if (!value) return "";
+  return maskMoneyInput(String(Math.abs(value)), true).replace(/^/, value < 0 ? "-" : "");
+}

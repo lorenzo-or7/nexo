@@ -415,3 +415,54 @@ describe("excluir compra no cartão", () => {
     await expect(as(BOB, () => q(`select delete_purchase($1)`, [pid]))).rejects.toThrow(/não encontrada/);
   });
 });
+
+describe("reembolsos de terceiros", () => {
+  async function setup() {
+    const acc = await newAccount(ALICE, `Reemb ${Math.random()}`, 0);
+    const card = await as(ALICE, async () => (await one<{ id: string }>(`insert into cards (name, closing_day, due_day, payment_account_id) values ('R', 13, 20, $1) returning id`, [acc])).id);
+    const pid = (await as(ALICE, () => one<{ id: string }>(`select create_credit_purchase($1, 'Jantar', null, '2026-10-05', 12000, $2::jsonb) as id`, [
+      card, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 12000 }]),
+    ]))).id;
+    return { acc, pid };
+  }
+
+  it("compra no crédito com parte paga por outra pessoa", async () => {
+    const { acc, pid } = await setup();
+    await as(ALICE, () => q(`select add_reimbursement($1, null, $2, 4000, '2026-10-19', 'Ana')`, [pid, acc]));
+    await as(ALICE, () => q(`select add_reimbursement($1, null, $2, 4000, '2026-10-19', 'Bruno')`, [pid, acc]));
+    // a receber, ainda não no saldo
+    expect(await balance(ALICE, acc)).toBe(0);
+    const rows = await as(ALICE, () => q<{ counterparty: string; status: string; kind: string }>(`select counterparty, status, kind from account_entries where purchase_id = $1 order by counterparty`, [pid]));
+    expect(rows).toEqual([{ counterparty: "Ana", status: "scheduled", kind: "refund" }, { counterparty: "Bruno", status: "scheduled", kind: "refund" }]);
+    // passar do total é recusado
+    await expect(as(ALICE, () => q(`select add_reimbursement($1, null, $2, 4001, '2026-10-19', 'Caio')`, [pid, acc]))).rejects.toThrow(/passa do valor/);
+    // recebeu: entra no saldo
+    const ana = await as(ALICE, () => one<{ id: string }>(`select id from account_entries where purchase_id = $1 and counterparty = 'Ana'`, [pid]));
+    await as(ALICE, () => q(`select confirm_entry($1, '2026-10-18')`, [ana.id]));
+    expect(await balance(ALICE, acc)).toBe(4000);
+  });
+
+  it("despesa em conta com reembolso; excluir a despesa tira o pendente", async () => {
+    const acc = await newAccount(ALICE, "Reemb conta", 10000);
+    const { id } = await as(ALICE, () => one<{ id: string }>(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on) values ($1, 'expense', 'confirmed', -6000, '2026-10-02') returning id`, [acc]));
+    await as(ALICE, () => q(`select add_reimbursement(null, $1, $2, 3000, '2026-10-10', 'Ana')`, [id, acc]));
+    await as(ALICE, () => q(`select delete_entry($1)`, [id]));
+    const live = await as(ALICE, () => q(`select 1 from account_entries where reimburses_entry_id = $1 and deleted_at is null`, [id]));
+    expect(live).toHaveLength(0);
+  });
+
+  it("excluir a compra tira os reembolsos pendentes, mas mantém os recebidos", async () => {
+    const { acc, pid } = await setup();
+    await as(ALICE, () => q(`select add_reimbursement($1, null, $2, 1000, '2026-10-19', 'Ana')`, [pid, acc]));
+    await as(ALICE, () => q(`select add_reimbursement($1, null, $2, 2000, '2026-10-19', 'Bia', 'confirmed')`, [pid, acc]));
+    await as(ALICE, () => q(`select delete_purchase($1)`, [pid]));
+    const live = await as(ALICE, () => q<{ counterparty: string }>(`select counterparty from account_entries where purchase_id = $1 and deleted_at is null`, [pid]));
+    expect(live.map((r) => r.counterparty)).toEqual(["Bia"]);
+  });
+
+  it("não aceita reembolso de compra de outro usuário", async () => {
+    const { pid } = await setup();
+    const bobAcc = await newAccount(BOB, "Bob reemb", 0);
+    await expect(as(BOB, () => q(`select add_reimbursement($1, null, $2, 100, '2026-10-19', 'X')`, [pid, bobAcc]))).rejects.toThrow(/não encontrada/);
+  });
+});

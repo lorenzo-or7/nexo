@@ -30,21 +30,25 @@ export interface CardOption {
   closingToDueMonths: 0 | 1 | null;
   closingDayRule: "next_invoice" | "current_invoice";
   overrides: Record<string, { closingDate?: string; dueDate?: string }>;
+  paymentAccountId: string | null;
 }
 export interface QuickEntryData {
   today: LocalDate;
   accounts: AccountOption[];
   categories: CategoryOption[];
   cards: CardOption[];
+  /** nomes já usados em reembolsos (para sugerir ao digitar) */
+  people: string[];
 }
 
 /** Dados do formulário de lançamento (usados em todas as páginas). */
 export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile: Profile): Promise<QuickEntryData> => {
-  const [acc, cat, cards, overrides] = await Promise.all([
+  const [acc, cat, cards, overrides, people] = await Promise.all([
     supabase.from("accounts").select("id,name,nickname,institution,color,opening_date").is("archived_at", null).order("sort_order").order("created_at"),
     supabase.from("categories").select("id,name,parent_id,kind,sort_order").is("archived_at", null).order("sort_order"),
-    supabase.from("cards").select("id,name,nickname,institution,color,closing_day,due_day,closing_to_due_months,closing_day_rule").is("archived_at", null).order("sort_order").order("created_at"),
+    supabase.from("cards").select("id,name,nickname,institution,color,closing_day,due_day,closing_to_due_months,closing_day_rule,payment_account_id").is("archived_at", null).order("sort_order").order("created_at"),
     supabase.from("invoice_overrides").select("card_id,invoice_ref,closing_date,due_date"),
+    supabase.from("account_entries").select("counterparty").not("counterparty", "is", null).is("deleted_at", null).order("created_at", { ascending: false }).limit(200),
   ]);
   if (acc.error || cat.error) throw new Error(`Falha ao carregar contas e categorias: ${(acc.error ?? cat.error)!.message}`);
   return {
@@ -66,10 +70,13 @@ export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile
       dueDay: k.due_day,
       closingToDueMonths: k.closing_to_due_months,
       closingDayRule: k.closing_day_rule,
+      paymentAccountId: k.payment_account_id,
       overrides: Object.fromEntries(
         (overrides.data ?? []).filter((o) => o.card_id === k.id).map((o) => [o.invoice_ref, { closingDate: o.closing_date ?? undefined, dueDate: o.due_date ?? undefined }]),
       ),
     })),
+    // sem a migration de reembolsos a consulta falha: só não sugere nomes
+    people: [...new Set((people.data ?? []).map((p) => p.counterparty as string))].slice(0, 30),
   };
 });
 
@@ -91,6 +98,11 @@ export interface EntryRow {
   invoiceRef: string | null;
   /** compra no cartão de crédito (não mexe no saldo da conta) */
   purchase?: { installments: number; firstInvoiceRef: string | null; status: string } | null;
+  /** neste lançamento de reembolso: quem paga e a compra de origem */
+  counterparty?: string | null;
+  reimbursesLabel?: string | null;
+  /** nesta compra/despesa: o que outras pessoas vão pagar (ou já pagaram) */
+  reimbursements?: { counterparty: string; amount: Cents; received: boolean }[];
 }
 
 export interface EntryFilters {
@@ -127,7 +139,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
   const range = f.month ? monthRange(f.month) : null;
   let query = supabase
     .from("account_entries")
-    .select("id,version,occurred_on,kind,status,amount_cents,description,account_id,category_id,payment_method,notes,transfer_id,card_id,invoice_ref")
+    .select("id,version,occurred_on,kind,status,amount_cents,description,account_id,category_id,payment_method,notes,transfer_id,card_id,invoice_ref,counterparty,purchase_id,reimburses_entry_id")
     .is("deleted_at", null)
     .order("occurred_on", { ascending: false })
     .order("created_at", { ascending: false })
@@ -142,7 +154,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
     const ids = [f.categoryId, ...categories.filter((c) => c.parentId === f.categoryId).map((c) => c.id)];
     query = query.in("category_id", ids);
   }
-  if (f.q) query = query.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
+  if (f.q) query = query.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%,counterparty.ilike.%${f.q}%`);
   // filtro de conta: aplicado depois para manter os dois lados das transferências
   const { data, error } = await query;
   if (error) throw new Error(`Falha ao carregar lançamentos: ${error.message}`);
@@ -200,6 +212,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       transfer,
       cardId: r.card_id,
       invoiceRef: r.invoice_ref,
+      counterparty: r.counterparty,
     });
   }
   // compras no crédito do mês: entram como despesa (pela data da compra), mas não saem da conta
@@ -240,6 +253,36 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       });
     }
     out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  }
+
+  // reembolsos ligados às despesas e compras listadas (podem estar em outros meses)
+  const expenseIds = out.filter((e) => e.kind === "expense" && !e.purchase).map((e) => e.id);
+  const purchaseIds = out.filter((e) => e.purchase).map((e) => e.id);
+  if (expenseIds.length || purchaseIds.length) {
+    const ors = [
+      expenseIds.length ? `reimburses_entry_id.in.(${expenseIds.slice(0, 300).join(",")})` : null,
+      purchaseIds.length ? `purchase_id.in.(${purchaseIds.slice(0, 300).join(",")})` : null,
+    ].filter(Boolean).join(",");
+    const { data: refunds } = await supabase
+      .from("account_entries")
+      .select("counterparty,amount_cents,status,purchase_id,reimburses_entry_id")
+      .is("deleted_at", null)
+      .or(ors);
+    const byOrigin = new Map<string, { counterparty: string; amount: Cents; received: boolean }[]>();
+    for (const r of refunds ?? []) {
+      const key = (r.purchase_id ?? r.reimburses_entry_id) as string;
+      byOrigin.set(key, [...(byOrigin.get(key) ?? []), { counterparty: r.counterparty ?? "Alguém", amount: Number(r.amount_cents) as Cents, received: r.status === "confirmed" }]);
+    }
+    for (const e of out) if (byOrigin.has(e.id)) e.reimbursements = byOrigin.get(e.id);
+  }
+  // nos reembolsos, o nome da compra de origem
+  const origins = new Map(out.map((e) => [e.id, e.description]));
+  for (const e of out) {
+    if (e.counterparty) {
+      const src = rows.find((r) => r.id === e.id);
+      const originId = (src?.purchase_id ?? src?.reimburses_entry_id) as string | null;
+      e.reimbursesLabel = originId ? origins.get(originId) ?? null : null;
+    }
   }
   return out;
 }

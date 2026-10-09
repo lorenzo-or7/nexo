@@ -22,14 +22,16 @@ export const quickEntry: QuickEntryData = {
     { id: CAT.receitas, name: "Receitas", parentId: null, kind: "income" },
     { id: CAT.salario, name: "Salário", parentId: CAT.receitas, kind: "income" },
   ],
+  people: ["Ana", "Bruno"],
   cards: [
-    { id: "00000000-0000-4000-8000-0000000000d1", name: "Nubank Ultravioleta", institution: "Nubank", color: "#820AD1", closingDay: 13, dueDay: 20, closingToDueMonths: null, closingDayRule: "next_invoice", overrides: {} },
+    { id: "00000000-0000-4000-8000-0000000000d1", name: "Nubank Ultravioleta", institution: "Nubank", color: "#820AD1", closingDay: 13, dueDay: 20, closingToDueMonths: null, closingDayRule: "next_invoice", overrides: {}, paymentAccountId: A },
   ],
 };
 
 const base = { version: 1, paymentMethod: null, notes: null, tags: [] as string[], transfer: null, cardId: null, invoiceRef: null };
 export const entries: EntryRow[] = [
-  { ...base, id: "00000000-0000-4000-8000-0000000000e9", date: "2026-10-09", kind: "expense", status: "confirmed", amount: -30000 as Cents, description: "Booster box", accountId: "", categoryId: CAT.geral, paymentMethod: "credit", cardId: "00000000-0000-4000-8000-0000000000d1", invoiceRef: "2026-10", purchase: { installments: 3, firstInvoiceRef: "2026-10", status: "active" } },
+  { ...base, id: "00000000-0000-4000-8000-0000000000e9", date: "2026-10-09", kind: "expense", status: "confirmed", amount: -30000 as Cents, description: "Booster box", accountId: "", categoryId: CAT.geral, paymentMethod: "credit", cardId: "00000000-0000-4000-8000-0000000000d1", invoiceRef: "2026-10", purchase: { installments: 3, firstInvoiceRef: "2026-10", status: "active" }, reimbursements: [{ counterparty: "Ana", amount: 15000 as Cents, received: false }] },
+  { ...base, id: "00000000-0000-4000-8000-0000000000e8", date: "2026-10-20", kind: "refund", status: "scheduled", amount: 15000 as Cents, description: "Reembolso: Booster box", accountId: A, categoryId: CAT.geral, counterparty: "Ana" },
   { ...base, id: "e1", date: "2026-10-19", kind: "income", status: "expected", amount: 48899 as Cents, description: "Freela site", accountId: A, categoryId: CAT.receitas },
   { ...base, id: "e2", date: "2026-10-09", kind: "expense", status: "confirmed", amount: -8790 as Cents, description: "Mercado do mês", accountId: A, categoryId: CAT.mercado, tags: ["casa"], paymentMethod: "debit" },
   { ...base, id: "e3", date: "2026-10-09", kind: "expense", status: "confirmed", amount: -2350 as Cents, description: null, accountId: A, categoryId: CAT.uber },

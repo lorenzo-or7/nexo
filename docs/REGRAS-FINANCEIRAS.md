@@ -75,3 +75,11 @@ Recebe compras à vista, no crédito (com parcelas) ou novas assinaturas e devol
 ## 8. Metas e orçamentos
 
 Aportes em metas (`goal_contributions`) são **reservas**, não despesas, e não alteram saldo nem consumo.
+
+## 9. Reembolsos de terceiros
+
+- Uma compra (no crédito ou em conta) pode ter partes que outras pessoas vão pagar. Cada parte vira um lançamento `refund` com `counterparty` (quem paga), ligado à compra (`purchase_id`) ou à despesa (`reimburses_entry_id`).
+- Nasce como **agendado** na data combinada (sugestão: vencimento da fatura): entra na projeção e no "livre para gastar", mas não no saldo real.
+- Ao marcar como recebido, entra no saldo e **reduz o consumo** na categoria da compra.
+- A soma dos reembolsos nunca passa do valor da compra (checado no banco).
+- Excluir a compra/despesa exclui junto os reembolsos ainda não recebidos; os já recebidos ficam (o dinheiro entrou de fato).

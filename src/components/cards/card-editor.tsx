@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useToast } from "@/components/ui/toast";
 import { BANKS, CARD_BRANDS, bankByKey } from "@/domain/banks";
 import { formatBRL, type Cents } from "@/domain/money";
@@ -153,7 +154,7 @@ function CardForm({ card, accounts, onDone }: { card?: EditableCard; accounts: {
             />
           </Field>
           <Field label="Limite" htmlFor="limit" error={errorFor("limit_cents")}>
-            <Input id="limit" name="limit" inputMode="decimal" placeholder="0,00" defaultValue={card && card.limit > 0 ? formatBRL(card.limit).replace("R$ ", "") : ""} />
+            <MoneyInput id="limit" name="limit" defaultValue={card && card.limit > 0 ? formatBRL(card.limit) : ""} />
           </Field>
           <Field label="Conta que paga a fatura" htmlFor="payment_account_id">
             <Picker

@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useToast } from "@/components/ui/toast";
 import { clearDemo, deleteAccount, loadDemo, saveProfile, type ActionResult } from "@/app/(app)/actions";
 
@@ -78,11 +79,11 @@ export function ProfileForm({
           <Picker id="timezone" name="timezone" defaultValue={initial.timezone} options={TZ.map(([v, l]) => ({ value: v, label: l }))} />
         </Field>
         <Field label="Reserva mínima" htmlFor="reserve">
-          <Input id="reserve" name="reserve" inputMode="decimal" placeholder="0,00" defaultValue={initial.reserve} />
+          <MoneyInput id="reserve" name="reserve" defaultValue={initial.reserve} />
           <p className="text-sm text-ink-3">Valor que nunca entra no &ldquo;livre para gastar&rdquo;.</p>
         </Field>
         <Field label="Margem de segurança" htmlFor="margin">
-          <Input id="margin" name="margin" inputMode="decimal" placeholder="0,00" defaultValue={initial.margin} />
+          <MoneyInput id="margin" name="margin" defaultValue={initial.margin} />
           <p className="text-sm text-ink-3">Folga extra para imprevistos.</p>
         </Field>
       </div>

@@ -1,15 +1,17 @@
 import Link from "next/link";
-import { ArrowLeftRight, CreditCard, Minus, Plus, Receipt, Scale, Undo2 } from "lucide-react";
+import { ArrowLeftRight, CreditCard, HandCoins, Minus, Plus, Receipt, Scale, Undo2 } from "lucide-react";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/card";
 import { formatMonthBR, type LocalDate } from "@/domain/dates";
 import { STATUS_LABEL } from "@/domain/entries";
-import { sum, type Cents } from "@/domain/money";
+import { formatBRL, sum, type Cents } from "@/domain/money";
 import type { EntryFilters, EntryRow, QuickEntryData } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
-import { ConfirmEntryButton, DeleteEntryButton } from "./entry-actions";
+import { ConfirmEntryButton, DeleteEntryButton, ReimburseButton } from "./entry-actions";
+import { dueDateOf } from "@/domain/billing";
+import { billingConfigOf } from "@/domain/entries";
 import { EntryDialog } from "./entry-dialog";
 import { EntriesFilters } from "./entries-filters";
 
@@ -26,6 +28,7 @@ function dayHeading(d: LocalDate, today: LocalDate): string {
 
 
 function iconFor(e: EntryRow) {
+  if (e.counterparty) return HandCoins;
   if (e.purchase) return CreditCard;
   if (e.transfer) return ArrowLeftRight;
   if (e.kind === "invoice_payment") return CreditCard;
@@ -60,6 +63,25 @@ export function EntriesView({
     const parent = c.parentId ? category.get(c.parentId) : null;
     return parent ? `${parent.name} › ${c.name}` : c.name;
   };
+
+  const reimbRemaining = (e: EntryRow) => -e.amount - (e.reimbursements ?? []).reduce((t, r) => t + r.amount, 0);
+  // compra no crédito: sugere o vencimento da fatura; despesa em conta: hoje
+  const reimbDefaultDate = (e: EntryRow) => {
+    const card = e.purchase ? data.cards.find((c) => c.id === e.cardId) : null;
+    if (card && e.invoiceRef) {
+      try {
+        const due = dueDateOf(billingConfigOf(card), e.invoiceRef);
+        return due < data.today ? data.today : due;
+      } catch {
+        return data.today;
+      }
+    }
+    return data.today;
+  };
+  // quem ainda vai te pagar (pendentes)
+  const owed = new Map<string, number>();
+  for (const e of entries) if (e.counterparty && e.status !== "confirmed") owed.set(e.counterparty, (owed.get(e.counterparty) ?? 0) + e.amount);
+  const owedTotal = [...owed.values()].reduce((a, b) => a + b, 0);
 
   const realized = entries.filter((e) => e.status === "confirmed" && !e.transfer);
   const income = sum(realized.filter((e) => e.kind === "income").map((e) => e.amount));
@@ -105,7 +127,7 @@ export function EntriesView({
                     {rows.map((e) => {
                       const Icon = iconFor(e);
                       const isTransfer = Boolean(e.transfer);
-                      const title = e.description || (isTransfer ? "Transferência" : catLabel(e.categoryId)?.split(" › ").pop()) || (e.kind === "adjustment" ? "Ajuste de saldo" : e.kind === "income" ? "Receita" : "Despesa");
+                      const title = e.counterparty ? `Reembolso · ${e.counterparty}` : e.description || (isTransfer ? "Transferência" : catLabel(e.categoryId)?.split(" › ").pop()) || (e.kind === "adjustment" ? "Ajuste de saldo" : e.kind === "income" ? "Receita" : "Despesa");
                       const isPurchase = Boolean(e.purchase);
                       const editable = !isPurchase && !["adjustment", "invoice_payment"].includes(e.kind);
                       const meta = isTransfer
@@ -131,6 +153,11 @@ export function EntriesView({
                                 </span>
                               )}
                               {isPurchase && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink-2">Crédito</span>}
+                              {e.reimbursements?.map((r, i) => (
+                                <span key={i} className={cn("rounded-full px-2 py-0.5", r.received ? "bg-positive-soft text-positive" : "bg-accent-soft text-accent")}>
+                                  {r.counterparty} {r.received ? "pagou" : "paga"} {formatBRL(r.amount)}
+                                </span>
+                              ))}
                               {e.purchase?.status === "refunded" && <span className="rounded-full bg-positive-soft px-2 py-0.5 text-positive">Estornada</span>}
                               {e.tags.map((t) => <span key={t} className="rounded-full bg-accent-soft px-2 py-0.5 text-accent">{t}</span>)}
                             </span>
@@ -154,6 +181,17 @@ export function EntriesView({
                             <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">{content}</div>
                           )}
                           {e.status !== "confirmed" && <ConfirmEntryButton id={e.id} />}
+                          {e.kind === "expense" && reimbRemaining(e) > 0 && (
+                            <ReimburseButton
+                              data={data}
+                              originId={e.id}
+                              isPurchase={isPurchase}
+                              label={title}
+                              remaining={reimbRemaining(e)}
+                              defaultDate={reimbDefaultDate(e)}
+                              defaultAccountId={isPurchase ? data.cards.find((c) => c.id === e.cardId)?.paymentAccountId : e.accountId}
+                            />
+                          )}
                           <DeleteEntryButton id={e.id} label={title} isTransfer={isTransfer} isPurchase={isPurchase} />
                         </li>
                       );
@@ -176,6 +214,26 @@ export function EntriesView({
             </dl>
             <p className="text-xs text-ink-3">Só o que já aconteceu. Compras no crédito contam pela data da compra; transferências entre suas contas e pagamentos de fatura não entram.</p>
           </Panel>
+          {owed.size > 0 && (
+            <Panel className="grid gap-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-[1.0625rem] font-semibold tracking-tight">Vão te pagar</h2>
+                <Money value={owedTotal} className="font-semibold text-positive" />
+              </div>
+              <ul className="grid gap-2 text-sm">
+                {[...owed.entries()].sort((a, b) => b[1] - a[1]).map(([who, v]) => (
+                  <li key={who} className="flex items-center justify-between gap-3">
+                    <Link href={`${basePath}?q=${encodeURIComponent(who)}`} className="flex min-w-0 items-center gap-2 hover:text-accent">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">{who.slice(0, 1).toUpperCase()}</span>
+                      <span className="truncate">{who}</span>
+                    </Link>
+                    <Money value={v as Cents} className="font-medium" />
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-ink-3">Já entram na previsão do saldo. Ao receber, toque em &ldquo;Realizado&rdquo; no reembolso.</p>
+            </Panel>
+          )}
           {pendingCount > 0 && filters.kind !== "pending" && (
             <Link href={`${basePath}?tipo=pending`} className="rounded-[var(--radius-card)] border border-dashed border-border-strong px-5 py-4 text-sm text-ink-2 hover:border-accent hover:text-ink">
               <span className="font-semibold text-ink">{pendingCount} {pendingCount === 1 ? "lançamento pendente" : "lançamentos pendentes"}</span>{filters.month ? " neste mês" : ""}. Ver todos os pendentes

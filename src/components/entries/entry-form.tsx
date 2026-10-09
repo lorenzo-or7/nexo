@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
-import { ArrowDown, ChevronDown, CreditCard } from "lucide-react";
+import { ArrowDown, ChevronDown, CreditCard, HandCoins } from "lucide-react";
 import * as React from "react";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { saveEntry, type EntryActionResult } from "@/app/(app)/lancamentos/actions";
+import { ReimbursementFields } from "./reimbursement-fields";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Picker, type PickerOption } from "@/components/ui/picker";
 import { useToast } from "@/components/ui/toast";
 import { dueDateOf, invoiceRefForPurchase } from "@/domain/billing";
@@ -104,6 +106,7 @@ function FormBody({
   const [cardId, setCardId] = useState(sticky?.cardId ?? data.cards[0]?.id ?? "");
   const [installments, setInstallments] = useState("1");
   const [amountText, setAmountText] = useState(initial ? toInput(initial.transfer ? initial.transfer.amount : initial.amount) : "");
+  const [reimbOn, setReimbOn] = useState(false);
   const [details, setDetails] = useState(Boolean(initial?.notes || initial?.tags.length));
   const [idempotencyKey] = useState(newKey);
   const againRef = useRef<HTMLInputElement>(null);
@@ -141,7 +144,7 @@ function FormBody({
   }, [isCredit, data.cards, cardId, date, installments, amountText]);
 
   const errorFor = (f: string) => (state && !state.ok && state.field === f ? state.error : undefined);
-  const known = ["amount", "account_id", "to_account_id", "occurred_on", "status", "description", "card_id", "installments"];
+  const known = ["amount", "account_id", "to_account_id", "occurred_on", "status", "description", "card_id", "installments", "reimb"];
   const generalError = state && !state.ok && !known.includes(state.field ?? "") ? state.error : undefined;
   const categoryKind = kind === "income" ? "income" : "expense";
   const tone = kind === "expense" ? "text-negative" : kind === "transfer" ? "text-ink" : "text-positive";
@@ -200,17 +203,15 @@ function FormBody({
         <label htmlFor="amount" className="text-sm font-medium text-ink-2">Valor</label>
         <div className={cn("flex items-baseline gap-2 border-b-2 border-border-strong pb-1 transition-colors focus-within:border-accent", errorFor("amount") && "border-negative")}>
           <span className={cn("text-2xl font-semibold", tone)}>R$</span>
-          <input
+          <MoneyInput
             ref={amountRef}
             id="amount"
             name="amount"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0,00"
+            variant="bare"
             value={amountText}
-            onChange={(e) => setAmountText(e.target.value.replace(/[^\d.,]/g, ""))}
+            onValueChange={setAmountText}
             aria-invalid={Boolean(errorFor("amount")) || undefined}
-            className={cn("tabular w-full appearance-none border-0 bg-transparent p-0 text-[2.25rem] font-semibold tracking-[-0.03em] shadow-none outline-none ring-0 placeholder:text-ink-3/60 focus:outline-none focus:ring-0", tone)}
+            className={cn("w-full appearance-none border-0 bg-transparent p-0 text-[2.25rem] font-semibold tracking-[-0.03em] shadow-none outline-none ring-0 placeholder:text-ink-3/60 focus:outline-none focus:ring-0", tone)}
           />
         </div>
         {errorFor("amount") && <p role="alert" className="text-sm text-negative">{errorFor("amount")}</p>}
@@ -322,6 +323,45 @@ function FormBody({
           </Field>
         )}
       </div>
+
+      {kind === "expense" && !editing && (
+        <div className={cn("grid gap-4 rounded-2xl border p-4 transition-colors", reimbOn ? "border-[color-mix(in_oklab,var(--accent)_40%,var(--border))] bg-accent-soft/40" : "border-border bg-field/40")}>
+          <div className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-3">
+              <span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent"><HandCoins className="size-[18px]" /></span>
+              <span>
+                <span id="reimb-label" className="block font-medium">Outra pessoa vai me pagar</span>
+                <span className="block text-sm text-ink-3">O valor entra como &ldquo;a receber&rdquo; e não pesa no seu livre para gastar.</span>
+              </span>
+            </span>
+            {reimbOn && <input type="hidden" name="reimb_on" value="on" />}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={reimbOn}
+              aria-labelledby="reimb-label"
+              onClick={() => setReimbOn((v) => !v)}
+              className={cn(
+                "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+                reimbOn ? "bg-crimson" : "bg-border-strong",
+                "after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition-transform",
+                reimbOn && "after:translate-x-5",
+              )}
+            />
+          </div>
+          {reimbOn && (
+            <ReimbursementFields
+              key={`${isCredit}-${cardId}-${creditPreview?.due ?? date}`}
+              data={data}
+              totalText={amountText}
+              defaultDate={isCredit && creditPreview ? creditPreview.due : date}
+              defaultAccountId={isCredit ? data.cards.find((c) => c.id === cardId)?.paymentAccountId : accountId}
+              hint={isCredit ? "Sugerimos o vencimento da fatura como data. Quando a pessoa pagar, marque como recebido no extrato." : "Quando a pessoa pagar, marque como recebido no extrato."}
+            />
+          )}
+          {errorFor("reimb") && <p role="alert" className="text-sm text-negative">{errorFor("reimb")}</p>}
+        </div>
+      )}
 
       {kind !== "transfer" && (
         <div className="grid gap-5">
