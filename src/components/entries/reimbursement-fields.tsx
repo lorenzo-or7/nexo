@@ -2,6 +2,7 @@
 import { useId, useState } from "react";
 import { Field, Input } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Picker } from "@/components/ui/picker";
 import type { QuickEntryData } from "@/lib/data/ledger";
 
@@ -51,7 +52,7 @@ export function ReimbursementFields({
         <MoneyInput id="reimb_amount" name="reimb_amount" value={amount} onValueChange={setEdited} />
       </Field>
       <Field label="Quando vai pagar" htmlFor="reimb_date">
-        <Input id="reimb_date" name="reimb_date" type="date" defaultValue={defaultDate} required />
+        <DatePicker id="reimb_date" name="reimb_date" defaultValue={defaultDate} today={data.today} />
       </Field>
       <Field label="Entra na conta" htmlFor="reimb_account">
         <Picker

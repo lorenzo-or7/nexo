@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
 import { MoneyInput } from "@/components/ui/money-input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast";
 import { ACCOUNT_TYPES, BANKS, bankByKey } from "@/domain/banks";
 import type { LocalDate } from "@/domain/dates";
@@ -105,7 +106,7 @@ function AccountForm({ account, today, onDone }: { account?: EditableAccount; to
           <MoneyInput id="opening_balance" name="opening_balance" allowNegative defaultValue={account ? asInput(account.openingBalance) : ""} />
         </Field>
         <Field label="Saldo no começo do dia" htmlFor="opening_date" error={errorFor("opening_date")}>
-          <Input id="opening_date" name="opening_date" type="date" defaultValue={account?.openingDate ?? today} required />
+          <DatePicker id="opening_date" name="opening_date" defaultValue={account?.openingDate ?? today} today={today} />
         </Field>
       </div>
       <p className="text-sm text-ink-3">

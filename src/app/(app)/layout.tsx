@@ -9,7 +9,8 @@ import { signOut } from "../(auth)/actions";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const user = await getSessionUser();
-  if (!user) redirect("/entrar");
+  // sessão inválida (ex.: conta removida): limpa os cookies antes de ir ao login
+  if (!user) redirect("/auth/sair");
   const profile = await loadProfile(supabase);
   const quickEntry = await loadQuickEntryData(supabase, profile);
   return (

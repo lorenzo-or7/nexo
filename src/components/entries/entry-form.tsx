@@ -8,6 +8,7 @@ import { ReimbursementFields } from "./reimbursement-fields";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Picker, type PickerOption } from "@/components/ui/picker";
 import { useToast } from "@/components/ui/toast";
 import { dueDateOf, invoiceRefForPurchase } from "@/domain/billing";
@@ -290,16 +291,16 @@ function FormBody({
 
       <div className={cn("grid gap-5", !isCredit && "sm:grid-cols-2")}>
         <Field label={isCredit ? "Data da compra" : "Data"} htmlFor="occurred_on" error={errorFor("occurred_on")}>
-          <Input
+          <DatePicker
             id="occurred_on"
             name="occurred_on"
-            type="date"
             value={date}
-            onChange={(e) => {
-              setDate(e.target.value);
-              if (!statusTouched && e.target.value) setStatus(defaultStatusFor(e.target.value, data.today, kind));
+            today={data.today}
+            invalid={Boolean(errorFor("occurred_on"))}
+            onValueChange={(d) => {
+              setDate(d);
+              if (!statusTouched) setStatus(defaultStatusFor(d, data.today, kind));
             }}
-            required
           />
         </Field>
         {isCredit ? (

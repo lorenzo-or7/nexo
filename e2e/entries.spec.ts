@@ -10,7 +10,10 @@ test("novo lançamento: data futura vira agendada; transferência pede De e Para
 
   const status = dialog.locator("input[name=status]");
   await expect(status).toHaveValue("confirmed");
-  await dialog.getByLabel("Data").fill("2026-10-25");
+  await dialog.getByLabel("Data").click();
+  await page.getByRole("gridcell", { name: "25 de outubro de 2026" }).click();
+  await expect(dialog.locator("input[name=occurred_on]")).toHaveValue("2026-10-25");
+  await expect(dialog.getByLabel("Data")).toContainText("25/10/2026");
   await expect(status).toHaveValue("scheduled");
   await expect(dialog.getByRole("combobox", { name: "Situação" })).toContainText("Agendada");
 
@@ -127,7 +130,8 @@ test("compra no crédito que outra pessoa vai pagar: valor e data sugeridos", as
   await page.getByRole("option", { name: /Crédito/ }).click();
   await d.getByRole("switch", { name: "Outra pessoa vai me pagar" }).click();
   await expect(d.getByLabel("Quanto")).toHaveValue("120,00");
-  await expect(d.getByLabel("Quando vai pagar")).toHaveValue("2026-10-20"); // vencimento da fatura
+  await expect(d.locator("input[name=reimb_date]")).toHaveValue("2026-10-20"); // vencimento da fatura
+  await expect(d.getByLabel("Quando vai pagar")).toContainText("20/10/2026");
   await expect(d.locator("input[name=reimb_account]")).toHaveValue("00000000-0000-4000-8000-0000000000a1"); // conta que paga o cartão
   await d.getByLabel("Quanto").fill("40,00");
   await expect(d.getByRole("button", { name: "Valor total" })).toBeVisible();
@@ -141,4 +145,23 @@ test("extrato: quem vai pagar aparece na compra, no reembolso e no resumo", asyn
   await page.getByRole("button", { name: "Alguém vai pagar Booster box" }).click();
   const d = page.getByRole("dialog", { name: "Alguém vai pagar" });
   await expect(d.getByLabel("Quanto")).toHaveValue("150,00"); // 300,00 − 150,00 já combinados
+});
+
+test("calendário: navega por mês, escolhe pelo teclado e tem atalho para hoje", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  const d = page.getByRole("dialog", { name: "Novo lançamento" });
+  await d.getByLabel("Data").click();
+  await expect(page.getByRole("grid", { name: "Outubro de 2026" })).toBeVisible();
+  await page.getByRole("button", { name: "Mês anterior" }).click();
+  await expect(page.getByRole("grid", { name: "Setembro de 2026" })).toBeVisible();
+  await page.getByRole("gridcell", { name: "15 de setembro de 2026" }).click();
+  await expect(d.locator("input[name=occurred_on]")).toHaveValue("2026-09-15");
+  await d.getByLabel("Data").click();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(d.locator("input[name=occurred_on]")).toHaveValue("2026-09-16");
+  await d.getByLabel("Data").click();
+  await page.getByRole("button", { name: "Hoje" }).click();
+  await expect(d.locator("input[name=occurred_on]")).toHaveValue("2026-10-09");
 });

@@ -25,12 +25,19 @@ export const createClient = cache(async () => {
   });
 });
 
-/** Usuário da sessão, validado no servidor de autenticação — uma única vez por requisição. */
+/**
+ * Usuário da sessão, validado no servidor de autenticação — uma única vez por requisição.
+ * Sem sessão válida → null. Falha de rede → erro (mostra a tela de erro, não volta ao login).
+ */
 export const getSessionUser = cache(async () => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user;
+  if (error) {
+    const offline = error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500 || /fetch failed|network/i.test(error.message);
+    if (offline) throw new Error("Não foi possível falar com o Supabase. Confira sua internet e se o projeto não está pausado.");
+    return null;
+  }
+  return data.user ?? null;
 });
 
 /** Retorna o usuário autenticado ou lança (para Server Actions). */

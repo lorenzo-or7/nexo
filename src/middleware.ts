@@ -38,9 +38,9 @@ export async function middleware(request: NextRequest) {
     if (pathname !== "/") to.searchParams.set("next", pathname);
     return NextResponse.redirect(to);
   }
-  if (user && (pathname === "/entrar" || pathname === "/cadastro")) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
+  // Quem já está logado e abre /entrar é levado ao início pela própria página,
+  // depois de confirmar a sessão no servidor (evita laço de redirecionamento
+  // quando o token é válido localmente mas a conta não existe mais).
   return response;
 }
 
