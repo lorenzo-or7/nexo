@@ -9,9 +9,9 @@ const button = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-ink hover:brightness-110 shadow-[0_8px_20px_-10px_var(--primary)]",
-        accent: "bg-crimson text-white hover:bg-[#a80c3f]",
-        outline: "border border-border-strong bg-transparent text-ink hover:bg-surface-2",
+        primary: "btn-primary",
+        accent: "btn-glow",
+        outline: "border border-border-strong bg-field/60 text-ink hover:border-accent/60 hover:bg-surface-2",
         ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
         danger: "border border-[color-mix(in_oklab,var(--negative)_40%,transparent)] text-negative hover:bg-accent-soft",
       },

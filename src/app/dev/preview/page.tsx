@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { isPreviewEnabled } from "@/lib/env";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { AppShell } from "@/components/shell/app-shell";
+import { quickEntry } from "./mock";
 import { Panel } from "@/components/ui/card";
 import { buildDashboard } from "@/domain/dashboard";
 import { demoScenario } from "@/domain/demo";
@@ -36,7 +37,7 @@ export default async function Preview({ searchParams }: { searchParams: Promise<
     horizon,
   });
   return (
-    <AppShell user={{ name: "Pré-visualização", email: "dev@nexo.local" }} profileTheme={null}>
+    <AppShell user={{ name: "Pré-visualização", email: "dev@nexo.local" }} profileTheme={null} quickEntry={quickEntry}>
       <DashboardView
         model={model}
         horizon={horizon}

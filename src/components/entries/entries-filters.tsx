@@ -41,7 +41,7 @@ export function EntriesFilters({ accounts, categories }: { accounts: AccountOpti
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por descrição ou observação"
-          className="h-11 w-full rounded-full border border-border-strong bg-surface pl-11 pr-4 text-[0.9375rem] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+          className="h-11 w-full rounded-full border border-border-strong bg-field/70 pl-11 pr-4 text-[0.9375rem] text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] focus:border-accent focus:shadow-[0_0_0_4px_var(--accent-soft)] focus:outline-none"
         />
       </label>
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">

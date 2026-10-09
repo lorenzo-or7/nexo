@@ -25,7 +25,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8 }}
-              className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink shadow-card"
+              className="panel pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl px-4 py-3 text-sm text-ink"
               role={t.tone === "error" ? "alert" : "status"}
             >
               {t.tone === "error" ? <CircleAlert className="size-4 text-negative" /> : <CircleCheck className="size-4 text-positive" />}

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { isPreviewEnabled } from "@/lib/env";
 import { CardsView } from "@/components/cards/cards-view";
 import { AppShell } from "@/components/shell/app-shell";
+import { quickEntry } from "../mock";
 import type { Cents } from "@/domain/money";
 import type { CardListItem } from "@/lib/data/cards";
 
@@ -20,7 +21,7 @@ export default async function Preview({ searchParams }: { searchParams: Promise<
     { ...base, id: "00000000-0000-4000-8000-000000000003", name: "Cartão NEXO", institutionKey: "outro", institutionName: null, brand: "elo", lastFour: "7730", color: "#241127", limit: 0 as Cents, closingDay: 28, dueDay: 5, used: 0 as Cents, available: 0 as Cents, invoice: null, logoUrl: "/brand/mark-sm.png", hasLogo: true },
   ];
   return (
-    <AppShell user={{ name: "Pré-visualização", email: "dev@nexo.local" }} profileTheme={null}>
+    <AppShell user={{ name: "Pré-visualização", email: "dev@nexo.local" }} profileTheme={null} quickEntry={quickEntry}>
       <CardsView cards={cards} accounts={[{ id: "acc", name: "Conta principal" }]} openNew={sp.novo === "1"} />
     </AppShell>
   );

@@ -168,7 +168,7 @@ function FormBody({
       {generalError && <FormMessage tone="error">{generalError}</FormMessage>}
 
       {/* tipo */}
-      <div role="radiogroup" aria-label="Tipo de lançamento" className="grid grid-cols-4 gap-1 rounded-2xl bg-surface-2 p-1">
+      <div role="radiogroup" aria-label="Tipo de lançamento" className="grid grid-cols-4 gap-1 rounded-2xl border border-border bg-field p-1">
         {QUICK_KINDS.map((k) => {
           const locked = editing && (k.key === "transfer") !== (initialKind === "transfer");
           return (
@@ -185,7 +185,7 @@ function FormBody({
               }}
               className={cn(
                 "h-10 rounded-xl text-sm font-medium transition-colors disabled:opacity-35",
-                kind === k.key ? "bg-surface text-ink shadow-[0_1px_3px_rgba(36,17,39,0.18)]" : "text-ink-2 hover:text-ink",
+                kind === k.key ? "bg-surface-2 text-ink shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_45%,transparent),0_6px_16px_-10px_var(--accent)]" : "text-ink-2 hover:text-ink",
               )}
             >
               <span className="sm:hidden" aria-hidden>{k.short}</span>
@@ -350,7 +350,7 @@ function FormBody({
                 rows={2}
                 maxLength={2000}
                 defaultValue={initial?.notes ?? ""}
-                className="w-full rounded-[var(--radius-control)] border border-border-strong bg-surface px-4 py-3 text-base text-ink focus:border-accent focus:shadow-[0_0_0_4px_var(--accent-soft)] focus:outline-none"
+                className="w-full rounded-[var(--radius-control)] border border-border-strong bg-field px-4 py-3 text-base text-ink focus:border-accent focus:shadow-[0_0_0_4px_var(--accent-soft)] focus:outline-none"
               />
             </Field>
           </div>

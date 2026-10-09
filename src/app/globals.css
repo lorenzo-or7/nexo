@@ -16,12 +16,20 @@
   --brand-rose: #f25c8d;
 
   /* claro */
-  --bg: #fbf6f9;
+  --bg: #fbf5f8;
   --surface: #ffffff;
-  --surface-2: #f7edf3;
+  --surface-2: #f8eef4;
   --surface-3: #efdfe8;
-  --border: #ead9e3;
-  --border-strong: #d9c0cf;
+  --field: #ffffff;
+  --border: #eddde6;
+  --border-strong: #dcc4d2;
+  --edge-hi: rgb(194 15 73 / 0.28);
+  --edge-lo: rgb(36 17 39 / 0.06);
+  --glow-1: rgb(242 92 141 / 0.18);
+  --glow-2: rgb(130 60 160 / 0.10);
+  --grid-dot: rgb(36 17 39 / 0.07);
+  --hero-from: #241127;
+  --hero-to: #c20f49;
   --ink: #241127;
   --ink-2: #5a4560;
   --ink-3: #8a7590;
@@ -37,18 +45,26 @@
   --warning: #9a5b00;
   --warning-soft: #fdf0d9;
   --sidebar: #ffffff;
-  --shadow: 0 1px 2px rgb(36 17 39 / 0.05), 0 8px 24px -12px rgb(36 17 39 / 0.12);
-  --chart-grid: #ead9e3;
+  --shadow: 0 1px 2px rgb(36 17 39 / 0.04), 0 18px 40px -24px rgb(36 17 39 / 0.22);
+  --chart-grid: #eddde6;
   color-scheme: light;
 }
 
 [data-theme="dark"] {
   --bg: #241127;
-  --surface: #2d1631;
-  --surface-2: #371d3b;
-  --surface-3: #432647;
+  --surface: #2b1430;
+  --surface-2: #36193b;
+  --surface-3: #422447;
+  --field: #200e23;
   --border: rgb(247 237 243 / 0.08);
-  --border-strong: rgb(247 237 243 / 0.16);
+  --border-strong: rgb(247 237 243 / 0.15);
+  --edge-hi: rgb(242 92 141 / 0.42);
+  --edge-lo: rgb(247 237 243 / 0.05);
+  --glow-1: rgb(194 15 73 / 0.30);
+  --glow-2: rgb(120 40 170 / 0.18);
+  --grid-dot: rgb(247 237 243 / 0.055);
+  --hero-from: #fff5fa;
+  --hero-to: #f25c8d;
   --ink: #f7edf3;
   --ink-2: #cbb6c8;
   --ink-3: #9b849b;
@@ -63,8 +79,8 @@
   --negative: #f25c8d;
   --warning: #f3b75a;
   --warning-soft: rgb(243 183 90 / 0.12);
-  --sidebar: #1d0d20;
-  --shadow: 0 1px 0 rgb(247 237 243 / 0.04) inset, 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --sidebar: #1c0b1f;
+  --shadow: 0 1px 0 rgb(247 237 243 / 0.05) inset, 0 24px 48px -28px rgb(0 0 0 / 0.75);
   --chart-grid: rgb(247 237 243 / 0.07);
   color-scheme: dark;
 }
@@ -74,6 +90,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-field: var(--field);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-ink: var(--ink);
@@ -106,6 +123,8 @@ html {
 body {
   background: var(--bg);
   color: var(--ink);
+  position: relative;
+  isolation: isolate;
   font-feature-settings: "ss01", "cv11";
   -webkit-tap-highlight-color: transparent;
 }
@@ -196,4 +215,113 @@ select {
 ::-webkit-scrollbar-corner {
   display: none;
   background: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Visual "futurista", leve: tudo em CSS estático (gradientes e bordas),
+   sem blur pesado nem animação contínua. Uma camada fixa = 1 pintura.
+   -------------------------------------------------------------------------- */
+
+/* ambiente: dois brilhos difusos + grade de pontos que some para baixo */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, var(--glow-1), transparent 60%),
+    radial-gradient(50rem 36rem at 105% 110%, var(--glow-2), transparent 60%),
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0) 0 0 / 22px 22px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, rgb(0 0 0 / 0.35) 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, rgb(0 0 0 / 0.35) 100%);
+}
+
+/* entrada da página: um único movimento curto, só opacidade e deslocamento */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.rise > * {
+  animation: rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.rise > *:nth-child(2) { animation-delay: 50ms; }
+.rise > *:nth-child(3) { animation-delay: 100ms; }
+.rise > *:nth-child(4) { animation-delay: 150ms; }
+.rise > *:nth-child(n + 5) { animation-delay: 190ms; }
+
+/* linha do gráfico com brilho */
+.chart-glow .recharts-area-curve {
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 70%, transparent));
+}
+
+@layer components {
+/* painel com borda em degradê (luz no canto superior) e reflexo no topo */
+.panel {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--surface) 100%, white 2.5%), var(--surface)) padding-box,
+    linear-gradient(150deg, var(--edge-hi), var(--edge-lo) 38%, var(--edge-lo) 70%, color-mix(in oklab, var(--edge-hi) 40%, transparent)) border-box;
+  box-shadow: var(--shadow);
+}
+.panel-quiet {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 100%, white 2%), var(--surface));
+}
+
+/* número de destaque com degradê da marca */
+.text-hero {
+  background: linear-gradient(100deg, var(--hero-from) 10%, var(--hero-to) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* botão principal: degradê + brilho */
+.btn-glow {
+  background: linear-gradient(135deg, #d4145a 0%, #c20f49 45%, #9e0c3c 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 10px 24px -12px rgb(194 15 73 / 0.85);
+}
+.btn-glow:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 14px 30px -12px rgb(242 92 141 / 0.9);
+}
+
+/* reflexo que atravessa o cartão no hover (só transform: barato) */
+.card-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.16) 48%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.group:hover .card-sheen {
+  transform: translateX(100%);
+}
+
+
+.btn-primary {
+  background: linear-gradient(135deg, #3d1f44 0%, #241127 100%);
+  color: #f7edf3;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 10px 22px -12px rgb(36 17 39 / 0.7);
+}
+.btn-primary:hover {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 14px 28px -12px rgb(194 15 73 / 0.55);
+}
+[data-theme="dark"] .btn-primary {
+  background: linear-gradient(135deg, #d4145a 0%, #c20f49 45%, #9e0c3c 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 10px 24px -12px rgb(194 15 73 / 0.85);
+}
+[data-theme="dark"] .btn-primary:hover {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 14px 30px -12px rgb(242 92 141 / 0.9);
+}
+
 }

@@ -68,7 +68,7 @@ export function DashboardView({
         title={greeting}
         subtitle={`Hoje é ${formatDateBR(model.today)}`}
         actions={
-          <nav aria-label="Período da projeção" className="flex rounded-full border border-border bg-surface p-1">
+          <nav aria-label="Período da projeção" className="flex rounded-full border border-border bg-field/60 p-1">
             {HORIZONS.map((h) => (
               <Link
                 key={h.key}
@@ -76,7 +76,7 @@ export function DashboardView({
                 aria-current={horizon === h.key ? "true" : undefined}
                 className={cn(
                   "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
-                  horizon === h.key ? "bg-primary text-primary-ink" : "text-ink-2 hover:text-ink",
+                  horizon === h.key ? "btn-primary" : "text-ink-2 hover:text-ink",
                 )}
               >
                 {h.label}
@@ -91,25 +91,25 @@ export function DashboardView({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
         {/* destaque: quanto posso gastar + linha do saldo */}
         <Panel className="relative isolate overflow-hidden">
-          <div aria-hidden className="absolute -right-24 -top-32 -z-10 size-[26rem] rounded-full bg-[radial-gradient(closest-side,var(--accent-soft),transparent)]" />
+          <div aria-hidden className="absolute -right-24 -top-40 -z-10 size-[30rem] rounded-full bg-[radial-gradient(closest-side,var(--glow-1),transparent)]" />
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div>
-              <p className="text-sm text-ink-2">Livre para gastar até {formatDateBR(model.horizonEnd)}</p>
-              <p className={cn("mt-1 text-[2.75rem] font-semibold leading-none tracking-[-0.045em] sm:text-[3.25rem]", t.free < 0 && "text-negative")}>
+              <p className="flex items-center gap-2 text-sm text-ink-2"><span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />Livre para gastar até {formatDateBR(model.horizonEnd)}</p>
+              <p className={cn("mt-2 text-[2.875rem] font-semibold leading-none tracking-[-0.05em] sm:text-[3.75rem]", t.free < 0 ? "text-negative" : "text-hero")}>
                 <Money value={t.free} />
               </p>
               <p className="mt-3 max-w-md text-sm text-ink-3">
                 É o menor saldo previsto no período{t.reserve > 0 ? `, já descontada a reserva de ${formatBRL(t.reserve)}` : ""}. Gastar mais do que isso hoje deixaria algum dia no vermelho.
               </p>
             </div>
-            <div className="flex gap-8 text-sm">
-              <div>
-                <p className="text-ink-3">Menor saldo</p>
-                <p className="font-semibold"><Money value={t.lowest} /> <span className="font-normal text-ink-3">em {short(t.lowestDate)}</span></p>
+            <div className="flex gap-3 text-sm">
+              <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
+                <p className="text-xs text-ink-3">Menor saldo · {short(t.lowestDate)}</p>
+                <p className="mt-0.5 font-semibold"><Money value={t.lowest} /></p>
               </div>
-              <div>
-                <p className="text-ink-3">Fim do período</p>
-                <p className="font-semibold"><Money value={t.projected} /></p>
+              <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
+                <p className="text-xs text-ink-3">Fim do período</p>
+                <p className="mt-0.5 font-semibold"><Money value={t.projected} /></p>
               </div>
             </div>
           </div>
@@ -121,7 +121,7 @@ export function DashboardView({
             </p>
           )}
 
-          <div className="-mx-2 mt-6">
+          <div className="chart-glow -mx-2 mt-6">
             <BalanceChart series={model.series} reserve={t.reserve} />
           </div>
         </Panel>
@@ -145,23 +145,19 @@ export function DashboardView({
               </ul>
             )}
           </Panel>
-          <Panel className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm text-ink-2"><ArrowDownLeft className="size-4 text-positive" />A receber</p>
-              <p className="mt-1 text-xl font-semibold"><Money value={t.toReceive} /></p>
-            </div>
-            <div>
-              <p className="flex items-center gap-1.5 text-sm text-ink-2"><ArrowUpRight className="size-4 text-negative" />A pagar</p>
-              <p className="mt-1 text-xl font-semibold"><Money value={t.toPay} /></p>
-            </div>
-            <div>
-              <p className="text-sm text-ink-2">Faturas abertas</p>
-              <p className="mt-1 font-semibold"><Money value={t.openInvoices} /></p>
-            </div>
-            <div>
-              <p className="text-sm text-ink-2">Fechadas a pagar</p>
-              <p className="mt-1 font-semibold"><Money value={t.closedUnpaid} /></p>
-            </div>
+          <Panel className="grid grid-cols-2 gap-3 p-4 sm:p-4">
+            {[
+              { label: "A receber", value: t.toReceive, icon: <ArrowDownLeft className="size-4" />, tone: "text-positive bg-positive-soft" },
+              { label: "A pagar", value: t.toPay, icon: <ArrowUpRight className="size-4" />, tone: "text-negative bg-accent-soft" },
+              { label: "Faturas abertas", value: t.openInvoices, icon: <CreditCard className="size-4" />, tone: "text-ink-2 bg-surface-2" },
+              { label: "Fechadas a pagar", value: t.closedUnpaid, icon: <CalendarClock className="size-4" />, tone: "text-ink-2 bg-surface-2" },
+            ].map((x) => (
+              <div key={x.label} className="rounded-2xl border border-border bg-field/50 p-3.5">
+                <span className={cn("grid size-8 place-items-center rounded-lg", x.tone)}>{x.icon}</span>
+                <p className="mt-3 text-sm text-ink-2">{x.label}</p>
+                <p className="mt-0.5 text-lg font-semibold tracking-tight"><Money value={x.value} /></p>
+              </div>
+            ))}
           </Panel>
         </div>
       </div>

@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 
 export function Panel({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
-  return <section className={cn("rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-card sm:p-6", className)} {...props} />;
+  return <section className={cn("panel rounded-[var(--radius-card)] p-5 sm:p-6", className)} {...props} />;
 }
 
 export function PanelHeader({ title, action, description }: { title: string; action?: React.ReactNode; description?: React.ReactNode }) {

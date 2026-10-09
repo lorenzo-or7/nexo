@@ -22,15 +22,16 @@ export function DialogContent({
 }) {
   return (
     <D.Portal>
-      <D.Overlay className="fixed inset-0 z-50 bg-[rgb(20_8_24/0.55)] backdrop-blur-[2px] data-[state=open]:animate-[fade-in_160ms_ease-out]" />
+      <D.Overlay className="fixed inset-0 z-50 bg-[rgb(16_6_18/0.62)] data-[state=open]:animate-[fade-in_160ms_ease-out]" />
       <D.Content
         className={cn(
-          "fixed z-50 flex max-h-[92dvh] flex-col overflow-hidden border border-border bg-surface text-ink shadow-[0_30px_80px_-30px_rgba(20,8,24,0.7)] focus:outline-none",
+          "panel fixed z-50 flex max-h-[92dvh] flex-col overflow-hidden text-ink shadow-[0_30px_80px_-30px_rgba(20,8,24,0.8)] focus:outline-none",
           "inset-x-0 bottom-0 rounded-t-[1.5rem] pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,.8,.2,1)]",
           "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(92vw,var(--dialog-w,560px))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[1.5rem] sm:data-[state=open]:animate-[pop-in_180ms_ease-out]",
           className,
         )}
       >
+        <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-rose/70 to-transparent" />
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
             <D.Title className="text-lg font-semibold tracking-tight">{title}</D.Title>

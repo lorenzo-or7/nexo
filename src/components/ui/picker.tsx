@@ -83,7 +83,7 @@ export function Picker({
           aria-label={ariaLabel}
           aria-invalid={invalid || undefined}
           className={cn(
-            "group flex w-full items-center gap-2.5 border border-border-strong bg-surface text-left text-ink outline-none transition-[border-color,box-shadow,background-color]",
+            "group flex w-full items-center gap-2.5 border border-border-strong bg-field text-left text-ink outline-none transition-[border-color,box-shadow,background-color]",
             "hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border-strong))]",
             "focus-visible:border-accent focus-visible:shadow-[0_0_0_4px_var(--accent-soft)] data-[state=open]:border-accent data-[state=open]:shadow-[0_0_0_4px_var(--accent-soft)]",
             "aria-[invalid=true]:border-negative disabled:opacity-50",
@@ -105,7 +105,7 @@ export function Picker({
             sideOffset={6}
             collisionPadding={12}
             className={cn(
-              "z-[60] min-w-[var(--radix-select-trigger-width)] max-w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-border bg-surface text-ink",
+              "panel z-[60] min-w-[var(--radix-select-trigger-width)] max-w-[min(92vw,420px)] overflow-hidden rounded-2xl text-ink",
               "shadow-[0_24px_60px_-20px_rgba(20,8,24,0.55),0_2px_6px_rgba(20,8,24,0.08)]",
               "data-[state=open]:animate-[pop-in_140ms_ease-out]",
             )}

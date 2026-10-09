@@ -41,8 +41,9 @@ export function BankCardFace({
   return (
     <div
       className={cn(
-        "relative isolate aspect-[1.586] w-full overflow-hidden rounded-[18px] select-none",
-        "shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_22px_40px_-24px_rgba(20,8,24,0.85)]",
+        "group relative isolate aspect-[1.586] w-full overflow-hidden rounded-[18px] select-none",
+        "shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_0_0_1px_rgba(255,255,255,0.08)_inset,0_24px_44px_-24px_rgba(20,8,24,0.9)]",
+        "transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_0_0_1px_rgba(255,255,255,0.12)_inset,0_30px_50px_-22px_rgba(194,15,73,0.55)]",
         className,
       )}
       style={{ color: ink, background: card.artUrl ? "#111" : `linear-gradient(135deg, ${base} 0%, ${shade} 100%)` }}
@@ -65,6 +66,7 @@ export function BankCardFace({
         </>
       )}
 
+      <span aria-hidden className="card-sheen" />
       <div className={cn("flex h-full flex-col justify-between", pad)}>
         <div className="flex items-start justify-between gap-3">
           {card.logoUrl ? (

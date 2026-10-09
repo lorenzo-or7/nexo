@@ -43,7 +43,7 @@ export default async function DiagnosticsPage() {
         {checks.map((c) => {
           const s = ICON[c.status];
           return (
-            <li key={c.id} className={cn("rounded-2xl border bg-surface p-4 sm:p-5", c.status === "error" ? "border-[color-mix(in_oklab,var(--negative)_45%,var(--border))]" : "border-border")}>
+            <li key={c.id} className={cn("panel rounded-2xl p-4 sm:p-5", c.status === "error" && "shadow-[0_0_0_1px_color-mix(in_oklab,var(--negative)_45%,transparent)]")}>
               <div className="flex items-start gap-3">
                 <s.icon className={cn("mt-0.5 size-5 shrink-0", s.className)} aria-label={s.label} />
                 <div className="min-w-0">

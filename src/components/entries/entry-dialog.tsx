@@ -36,7 +36,7 @@ export function QuickEntryButton({ data, variant }: { data: QuickEntryData; vari
         <EntryDialog
           data={data}
           trigger={
-            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[0.9375rem] font-medium text-primary-ink shadow-[0_8px_20px_-10px_var(--primary)] transition hover:brightness-110 active:scale-[0.98]">
+            <button className="btn-glow flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[0.9375rem] font-medium transition active:scale-[0.98]">
               <Plus className="size-[18px]" />
               Novo lançamento
             </button>
@@ -53,7 +53,7 @@ export function QuickEntryButton({ data, variant }: { data: QuickEntryData; vari
               aria-label="Novo lançamento"
               className={cn(
                 "fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid size-14 place-items-center rounded-full",
-                "bg-crimson text-white shadow-[0_12px_28px_-8px_rgba(194,15,73,0.7)] transition active:scale-95",
+                "btn-glow transition active:scale-95",
               )}
             >
               <Plus className="size-6" strokeWidth={2.4} />

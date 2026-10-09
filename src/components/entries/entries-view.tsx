@@ -86,7 +86,7 @@ export function EntriesView({
         title="Lançamentos"
         subtitle={filters.kind === "pending" ? "Tudo que ainda não aconteceu ou não foi confirmado." : "Tudo que entrou e saiu das suas contas."}
         actions={
-          <nav aria-label="Mês" className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+          <nav aria-label="Mês" className="flex items-center gap-1 rounded-full border border-border bg-field/60 p-1">
             <Button asChild variant="ghost" size="icon" className="size-9"><Link href={href(addMonthRef(filters.month, -1))} aria-label="Mês anterior"><ChevronLeft /></Link></Button>
             <span className="min-w-36 text-center text-sm font-medium">{monthLabel(filters.month)}</span>
             <Button asChild variant="ghost" size="icon" className="size-9"><Link href={href(addMonthRef(filters.month, 1))} aria-label="Próximo mês"><ChevronRight /></Link></Button>
@@ -117,7 +117,7 @@ export function EntriesView({
               {[...groups.entries()].map(([date, rows]) => (
                 <section key={date} aria-label={dayHeading(date, data.today)}>
                   <h2 className="mb-2 px-1 text-sm font-medium text-ink-3">{dayHeading(date, data.today)}</h2>
-                  <ul className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface">
+                  <ul className="panel overflow-hidden rounded-[var(--radius-card)]">
                     {rows.map((e) => {
                       const Icon = iconFor(e);
                       const isTransfer = Boolean(e.transfer);
@@ -133,7 +133,7 @@ export function EntriesView({
                       const display = isTransfer && !filters.accountId ? e.transfer!.amount : e.amount;
                       const content = (
                         <>
-                          <span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">
+                          <span className="relative grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-field text-ink-2">
                             <Icon className="size-[18px]" />
                             {!isTransfer && <span aria-hidden className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface" style={{ backgroundColor: dot }} />}
                           </span>

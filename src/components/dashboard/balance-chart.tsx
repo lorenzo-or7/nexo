@@ -13,11 +13,16 @@ export function BalanceChart({ series, reserve }: { series: { date: string; bala
         <AreaChart data={series} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
           <defs>
             <linearGradient id="nexo-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.32} />
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.34} />
+              <stop offset="70%" stopColor="var(--accent)" stopOpacity={0.05} />
               <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
             </linearGradient>
+            <linearGradient id="nexo-line" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#c20f49" />
+              <stop offset="100%" stopColor="#f25c8d" />
+            </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="2 6" />
           <XAxis
             dataKey="date"
             tickFormatter={(d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`}
@@ -42,7 +47,7 @@ export function BalanceChart({ series, reserve }: { series: { date: string; bala
             labelFormatter={(d) => formatDateBR(String(d))}
             formatter={(v) => [formatBRL(toCents(Number(v))), "Saldo previsto"]}
           />
-          <Area type="stepAfter" dataKey="balance" stroke="var(--accent)" strokeWidth={2.25} fill="url(#nexo-area)" isAnimationActive />
+          <Area type="stepAfter" dataKey="balance" stroke="url(#nexo-line)" strokeWidth={2.5} fill="url(#nexo-area)" isAnimationActive animationDuration={700} activeDot={{ r: 5, fill: "#f25c8d", stroke: "var(--surface)", strokeWidth: 2 }} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
