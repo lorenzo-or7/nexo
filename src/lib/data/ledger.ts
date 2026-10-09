@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { addMonthRef, clampedDate, daysInMonth, parseMonth, todayIn, type LocalDate } from "@/domain/dates";
 import type { EntryKind, EntryStatus } from "@/domain/ledger";
 import type { Cents } from "@/domain/money";
+import { categoryFilterIds } from "@/domain/categories";
 import { sanitizeSearch } from "@/domain/entries";
 import type { Profile } from "./finance";
 
@@ -19,6 +20,7 @@ export interface CategoryOption {
   name: string;
   parentId: string | null;
   kind: "expense" | "income";
+  color?: string | null;
 }
 export interface CardOption {
   id: string;
@@ -45,7 +47,7 @@ export interface QuickEntryData {
 export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile: Profile): Promise<QuickEntryData> => {
   const [acc, cat, cards, overrides, people] = await Promise.all([
     supabase.from("accounts").select("id,name,nickname,institution,color,opening_date").is("archived_at", null).order("sort_order").order("created_at"),
-    supabase.from("categories").select("id,name,parent_id,kind,sort_order").is("archived_at", null).order("sort_order"),
+    supabase.from("categories").select("id,name,parent_id,kind,color,sort_order").is("archived_at", null).order("sort_order").order("name"),
     supabase.from("cards").select("id,name,nickname,institution,color,closing_day,due_day,closing_to_due_months,closing_day_rule,payment_account_id").is("archived_at", null).order("sort_order").order("created_at"),
     supabase.from("invoice_overrides").select("card_id,invoice_ref,closing_date,due_date"),
     supabase.from("account_entries").select("counterparty").not("counterparty", "is", null).is("deleted_at", null).order("created_at", { ascending: false }).limit(200),
@@ -60,7 +62,7 @@ export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile
       color: a.color,
       openingDate: a.opening_date,
     })),
-    categories: (cat.data ?? []).map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id, kind: c.kind })),
+    categories: (cat.data ?? []).map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id, kind: c.kind, color: c.color })),
     cards: (cards.data ?? []).map((k) => ({
       id: k.id,
       name: k.nickname || k.name,
@@ -151,7 +153,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
   if (f.kind === "transfer") query = query.eq("kind", "transfer");
   if (f.categoryId) {
     // categoria principal inclui as subcategorias
-    const ids = [f.categoryId, ...categories.filter((c) => c.parentId === f.categoryId).map((c) => c.id)];
+    const ids = categoryFilterIds(f.categoryId, categories);
     query = query.in("category_id", ids);
   }
   if (f.q) query = query.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%,counterparty.ilike.%${f.q}%`);
@@ -226,7 +228,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       .limit(ENTRY_LIMIT);
     if (range) pq = pq.gte("purchased_on", range.from).lte("purchased_on", range.to);
     if (f.categoryId) {
-      const ids = [f.categoryId, ...categories.filter((c) => c.parentId === f.categoryId).map((c) => c.id)];
+      const ids = categoryFilterIds(f.categoryId, categories);
       pq = pq.in("category_id", ids);
     }
     if (f.q) pq = pq.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%`);

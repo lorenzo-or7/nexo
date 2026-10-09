@@ -83,3 +83,10 @@ Aportes em metas (`goal_contributions`) são **reservas**, não despesas, e não
 - Ao marcar como recebido, entra no saldo e **reduz o consumo** na categoria da compra.
 - A soma dos reembolsos nunca passa do valor da compra (checado no banco).
 - Excluir a compra/despesa exclui junto os reembolsos ainda não recebidos; os já recebidos ficam (o dinheiro entrou de fato).
+
+## 10. Categorias
+
+- Dois níveis: categoria principal → subcategorias. A subcategoria tem sempre o tipo (despesa/receita) da principal; mudar o tipo da principal leva as subcategorias junto (trigger no banco).
+- Nome único por nível, sem diferenciar maiúsculas (no app) e exato (no banco).
+- Filtrar pela principal inclui as subcategorias.
+- `remove_category`: sem uso, apaga (com as subcategorias); com lançamentos, compras, assinaturas, recorrências ou orçamentos, **arquiva** — some das opções, mas o histórico mantém o nome. Arquivadas podem ser restauradas; criar de novo uma arquivada com o mesmo nome a restaura.

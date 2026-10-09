@@ -35,7 +35,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("grid gap-1.5", className)}>
+    <div className={cn("grid min-w-0 grid-cols-1 gap-1.5", className)}>
       <div className="flex items-baseline justify-between gap-3">
         <label htmlFor={htmlFor} className="text-sm font-medium text-ink-2">
           {label}

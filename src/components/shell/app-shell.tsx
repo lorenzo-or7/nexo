@@ -115,7 +115,7 @@ export function AppShell({
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar/88 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
       >
         <ul className="mx-auto flex max-w-md">
-          {NAV.map((item) => {
+          {NAV.filter((item) => !item.desktopOnly).map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <li key={item.href} className="flex-1">

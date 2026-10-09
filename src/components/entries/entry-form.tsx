@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
-import { ArrowDown, ChevronDown, CreditCard, HandCoins } from "lucide-react";
+import { ArrowDown, ChevronDown, CreditCard, HandCoins, Plus } from "lucide-react";
 import * as React from "react";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { saveEntry, type EntryActionResult } from "@/app/(app)/lancamentos/actions";
+import { createCategoryQuick } from "@/app/(app)/categorias/actions";
+import { categoryColor, categoryTree, hasNameConflict, normalizeCategoryName } from "@/domain/categories";
 import { ReimbursementFields } from "./reimbursement-fields";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
@@ -271,7 +273,7 @@ function FormBody({
               />
             </Field>
           )}
-          <Field label="Categoria" htmlFor="category_id" className={cn(kind !== "expense" && "sm:col-span-2")}>
+          <Field label="Categoria" htmlFor="category_id" className="min-w-0 sm:col-span-2">
             <CategoryPicker key={categoryKind} kind={categoryKind} categories={data.categories} defaultValue={initial?.categoryId ?? ""} />
           </Field>
         </div>
@@ -414,10 +416,102 @@ function FormBody({
 }
 
 function CategoryPicker({ kind, categories, defaultValue }: { kind: "expense" | "income"; categories: CategoryOption[]; defaultValue: string }) {
+  const [value, setValue] = useState(defaultValue);
+  // criadas aqui aparecem na hora, antes de a página recarregar os dados
+  const [extra, setExtra] = useState<CategoryOption[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newParent, setNewParent] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = React.useTransition();
+  const toast = useToast();
+  const all = [...categories, ...extra.filter((e) => !categories.some((c) => c.id === e.id))];
+
   const options: PickerOption[] = [{ value: "", label: "Sem categoria" }];
-  for (const p of categories.filter((c) => c.kind === kind && !c.parentId)) {
-    options.push({ value: p.id, label: `${p.name} (geral)`, group: p.name });
-    for (const c of categories.filter((x) => x.parentId === p.id)) options.push({ value: c.id, label: c.name, group: p.name });
+  for (const { parent, children } of categoryTree(all, kind)) {
+    options.push({ value: parent.id, label: `${parent.name} (geral)`, group: parent.name, color: categoryColor(parent, all) });
+    for (const c of children) options.push({ value: c.id, label: c.name, group: parent.name, color: categoryColor(c, all) });
   }
-  return <Picker id="category_id" name="category_id" defaultValue={defaultValue} options={options} />;
+
+  const create = () => {
+    const name = normalizeCategoryName(newName);
+    if (!name) return setError("Dê um nome à categoria");
+    if (hasNameConflict(all, name, newParent || null)) return setError("Já existe uma categoria com esse nome aqui.");
+    setError(null);
+    start(async () => {
+      const r = await createCategoryQuick({ name, kind, parentId: newParent || null });
+      if (!r?.ok) return setError(r?.error ?? "Não foi possível criar a categoria.");
+      if (r.id) {
+        const id = r.id;
+        setExtra((x) => [...x, { id, name, parentId: newParent || null, kind, color: null }]);
+        setValue(id);
+      }
+      toast.show({ tone: "success", message: r.message });
+      setCreating(false);
+      setNewName("");
+      setNewParent("");
+    });
+  };
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex gap-2">
+        <div className="min-w-0 flex-1">
+          <Picker id="category_id" name="category_id" value={value} onValueChange={setValue} options={options} />
+        </div>
+        <button
+          type="button"
+          onClick={() => setCreating((c) => !c)}
+          aria-expanded={creating}
+          aria-label="Criar categoria"
+          title="Criar categoria"
+          className={cn(
+            "grid size-12 shrink-0 place-items-center rounded-[var(--radius-control)] border border-border-strong bg-field text-ink-2 transition-colors hover:border-accent hover:text-accent",
+            creating && "border-accent text-accent",
+          )}
+        >
+          <Plus className={cn("size-5 transition-transform", creating && "rotate-45")} />
+        </button>
+      </div>
+      {creating && (
+        <div className="grid gap-2.5 rounded-2xl border border-border bg-surface-2/60 p-3 animate-[pop-in_140ms_ease-out]" data-testid="quick-category">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <Input
+              aria-label="Nome da nova categoria"
+              placeholder={kind === "income" ? "Nova categoria de receita" : "Nova categoria de despesa"}
+              value={newName}
+              maxLength={50}
+              autoFocus
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter cria a categoria (não envia o lançamento)
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  create();
+                }
+              }}
+              aria-invalid={Boolean(error) || undefined}
+            />
+            <Picker
+              aria-label="Dentro de"
+              value={newParent}
+              onValueChange={setNewParent}
+              options={[
+                { value: "", label: "Categoria principal" },
+                ...categoryTree(all, kind).map(({ parent }) => ({ value: parent.id, label: `Dentro de ${parent.name}`, color: categoryColor(parent, all) })),
+              ]}
+            />
+          </div>
+          {error && <p className="text-sm text-negative" role="alert">{error}</p>}
+          <div className="flex items-center justify-between gap-2">
+            <Link href="/categorias" className="text-sm text-ink-3 underline-offset-4 hover:text-accent hover:underline">Gerenciar todas</Link>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>Cancelar</Button>
+              <Button type="button" size="sm" loading={pending} onClick={create}>Criar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

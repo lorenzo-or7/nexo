@@ -13,7 +13,7 @@ Next.js 15 (App Router) · React 19 · TypeScript estrito · Tailwind CSS 4 · R
 | 2 — Contas, transações e saldos (telas) | ✅ contas, lançamentos, transferências, ajuste de saldo, lançamento rápido |
 | 3 — Cartões, faturas e parcelamentos (telas) | cadastro, edição e exclusão de cartões prontos; compras e faturas a seguir |
 | 4 — Dashboard e linha do tempo | dashboard pronto; tela da linha do tempo pendente |
-| 5 — Assinaturas, categorias e orçamentos | motor e banco prontos |
+| 5 — Assinaturas, categorias e orçamentos | categorias personalizadas prontas (tela, filtros, criação rápida); assinaturas e orçamentos a seguir |
 | 6 — Simulador, relatórios e metas | motor do simulador pronto |
 | 7 — Notificações, segurança e refinamento | RLS/auditoria prontos |
 
@@ -26,7 +26,7 @@ O **motor financeiro** (`src/domain`) e o **banco** (`supabase/migrations`) já 
    npx supabase link --project-ref <ref>
    npx supabase db push
    ```
-   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. São 9 arquivos; um deles cria o bucket privado `card-images` (logos e imagens dos cartões).
+   Ou, pelo painel, cole cada arquivo de `supabase/migrations` no **SQL Editor**, em ordem. São 10 arquivos; um deles cria o bucket privado `card-images` (logos e imagens dos cartões).
 2. Em **Authentication → URL Configuration**, adicione `http://localhost:3000/auth/confirm` às Redirect URLs. Nos templates de e-mail de confirmação e recuperação, use o link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}`.
 3. `cp .env.example .env.local` e preencha as chaves. A `SUPABASE_SERVICE_ROLE_KEY` só é usada no servidor (exclusão de conta) e nunca vai ao navegador.
 4. `npm install && npm run dev` (usa o Turbopack: a primeira abertura de cada página compila em poucos segundos; as seguintes são instantâneas).

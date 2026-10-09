@@ -14,7 +14,7 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     title: "Crie as tabelas",
     body: (
       <>
-        No painel, abra <strong className="font-medium text-ink">SQL Editor → New query</strong>. Cole cada arquivo da pasta <code>supabase/migrations</code>, um de cada vez e em ordem (são 9), e clique em Run.
+        No painel, abra <strong className="font-medium text-ink">SQL Editor → New query</strong>. Cole cada arquivo da pasta <code>supabase/migrations</code>, um de cada vez e em ordem (são 10), e clique em Run.
       </>
     ),
   },

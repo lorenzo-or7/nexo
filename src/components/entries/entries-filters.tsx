@@ -1,5 +1,7 @@
 "use client";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Search, Tags, X } from "lucide-react";
+import { categoryColor, categoryTree } from "@/domain/categories";
 import { addMonthRef } from "@/domain/dates";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -102,12 +104,21 @@ export function EntriesFilters({ accounts, categories, today }: { accounts: Acco
           onValueChange={(v) => set("categoria", v)}
           options={[
             { value: "", label: "Todas as categorias" },
-            ...categories.filter((c) => !c.parentId).flatMap((p) => [
-              { value: p.id, label: `${p.name} (geral)`, group: p.name },
-              ...categories.filter((c) => c.parentId === p.id).map((c) => ({ value: c.id, label: c.name, group: p.name })),
-            ]),
+            ...(["expense", "income"] as const).flatMap((k) =>
+              categoryTree(categories, k).flatMap(({ parent, children }) => [
+                { value: parent.id, label: `${parent.name} (tudo)`, group: `${parent.name} · ${k === "expense" ? "despesa" : "receita"}`, color: categoryColor(parent, categories) },
+                ...children.map((c) => ({ value: c.id, label: c.name, group: `${parent.name} · ${k === "expense" ? "despesa" : "receita"}`, color: categoryColor(c, categories) })),
+              ]),
+            ),
           ]}
         />
+        <Link
+          href="/categorias"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-border-strong px-3.5 text-sm text-ink-2 transition-colors hover:border-accent hover:text-accent"
+        >
+          <Tags className="size-4" />
+          Categorias
+        </Link>
         {active && (
           <button
             type="button"

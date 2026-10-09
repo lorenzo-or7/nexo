@@ -466,3 +466,57 @@ describe("reembolsos de terceiros", () => {
     await expect(as(BOB, () => q(`select add_reimbursement($1, null, $2, 100, '2026-10-19', 'X')`, [pid, bobAcc]))).rejects.toThrow(/não encontrada/);
   });
 });
+
+describe("categorias do usuário", () => {
+  const cat = (uid: string, name: string, kind = "expense", parent: string | null = null) =>
+    as(uid, async () => (await one<{ id: string }>(`insert into categories (name, kind, parent_id) values ($1, $2, $3) returning id`, [name, kind, parent])).id);
+
+  it("cria categoria e subcategoria; nome repetido no mesmo nível é recusado", async () => {
+    const pets = await cat(ALICE, "Pets");
+    await cat(ALICE, "Ração", "expense", pets);
+    await expect(cat(ALICE, "Ração", "expense", pets)).rejects.toThrow(/duplicate|unique/i);
+    // mesmo nome em outro nível pode
+    await cat(ALICE, "Ração");
+    // outro usuário não enxerga nem usa como principal
+    const seen = await as(BOB, () => q(`select 1 from categories where id = $1`, [pets]));
+    expect(seen).toHaveLength(0);
+    await expect(cat(BOB, "Intrusa", "expense", pets)).rejects.toThrow();
+  });
+
+  it("no máximo dois níveis e mesmo tipo da principal", async () => {
+    const casa = await cat(ALICE, "Casa nova");
+    const moveis = await cat(ALICE, "Móveis", "expense", casa);
+    await expect(cat(ALICE, "Sofá", "expense", moveis)).rejects.toThrow(/não pode ter subcategorias/);
+    await expect(cat(ALICE, "Aluguel recebido", "income", casa)).rejects.toThrow(/mesmo tipo/);
+    // principal com filhas não pode virar subcategoria
+    const outra = await cat(ALICE, "Outra principal");
+    await expect(as(ALICE, () => q(`update categories set parent_id = $1 where id = $2`, [outra, casa]))).rejects.toThrow(/tem subcategorias/);
+  });
+
+  it("mudar o tipo da principal leva as subcategorias junto", async () => {
+    const extra = await cat(ALICE, "Extras");
+    const sub = await cat(ALICE, "Bicos", "expense", extra);
+    await as(ALICE, () => q(`update categories set kind = 'income' where id = $1`, [extra]));
+    const r = await as(ALICE, () => one<{ kind: string }>(`select kind from categories where id = $1`, [sub]));
+    expect(r.kind).toBe("income");
+  });
+
+  it("sem uso é excluída; em uso é arquivada com as subcategorias", async () => {
+    const vazia = await cat(ALICE, "Vazia");
+    await cat(ALICE, "Filha vazia", "expense", vazia);
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_category($1) as r`, [vazia]))).r).toBe("deleted");
+    expect(await as(ALICE, () => q(`select 1 from categories where id = $1 or parent_id = $1`, [vazia]))).toHaveLength(0);
+
+    const usada = await cat(ALICE, "Usada");
+    const filha = await cat(ALICE, "Filha usada", "expense", usada);
+    const acc = await newAccount(ALICE, "Cat conta", 1000);
+    await as(ALICE, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on, category_id) values ($1, 'expense', 'confirmed', -100, '2026-10-02', $2)`, [acc, filha]));
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_category($1) as r`, [usada]))).r).toBe("archived");
+    const rows = await as(ALICE, () => q<{ archived: boolean }>(`select archived_at is not null as archived from categories where id in ($1, $2)`, [usada, filha]));
+    expect(rows.every((r) => r.archived)).toBe(true);
+    // o lançamento continua com a categoria
+    const e = await as(ALICE, () => one<{ category_id: string }>(`select category_id from account_entries where account_id = $1`, [acc]));
+    expect(e.category_id).toBe(filha);
+    await expect(as(BOB, () => q(`select remove_category($1)`, [usada]))).rejects.toThrow(/não encontrada/);
+  });
+});
