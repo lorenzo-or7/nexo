@@ -295,3 +295,32 @@ describe("conta excluída", () => {
     expect(Number((left[0] as { n: string }).n)).toBe(0);
   });
 });
+
+describe("cartões: excluir ou arquivar", () => {
+  it("cartão sem movimentos é excluído; com histórico é arquivado", async () => {
+    const acc = await newAccount(ALICE, "Conta cartões", 0);
+    const [empty, used] = await as(ALICE, async () => {
+      const a = await one<{ id: string }>(`insert into cards (name, closing_day, due_day, payment_account_id, institution_key) values ('Vazio', 3, 10, $1, 'nubank') returning id`, [acc]);
+      const b = await one<{ id: string }>(`insert into cards (name, closing_day, due_day, payment_account_id) values ('Usado', 3, 10, $1) returning id`, [acc]);
+      return [a.id, b.id];
+    });
+    await as(ALICE, () => q(`select create_credit_purchase($1, 'Algo', null, '2026-10-01', 1000, $2::jsonb)`, [used, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 1000 }])]));
+
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_card($1) r`, [empty]))).r).toBe("deleted");
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_card($1) r`, [used]))).r).toBe("archived");
+    expect(await as(ALICE, () => q(`select 1 from cards where id = $1`, [empty]))).toHaveLength(0);
+    const kept = await as(ALICE, () => one<{ archived_at: string | null }>(`select archived_at from cards where id = $1`, [used]));
+    expect(kept.archived_at).not.toBeNull();
+    expect(await as(ALICE, () => q(`select 1 from card_charges where card_id = $1`, [used]))).toHaveLength(1);
+  });
+
+  it("não remove cartão de outro usuário", async () => {
+    const card = await as(ALICE, async () => (await one<{ id: string }>(`insert into cards (name, closing_day, due_day) values ('Da Alice', 3, 10) returning id`)).id);
+    await expect(as(BOB, () => q(`select remove_card($1)`, [card]))).rejects.toThrow(/não encontrado/);
+    expect(await as(ALICE, () => q(`select 1 from cards where id = $1`, [card]))).toHaveLength(1);
+  });
+
+  it("valida a chave da instituição", async () => {
+    await expect(as(ALICE, () => q(`insert into cards (name, closing_day, due_day, institution_key) values ('x', 3, 10, 'Nu Bank!')`))).rejects.toThrow(/check/);
+  });
+});

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CardBillingConfig, CardCharge, CardPayment } from "@/domain/billing";
 import type { AccountMeta, CardMeta, CategoryMeta, DashboardInput } from "@/domain/dashboard";
@@ -6,6 +7,7 @@ import { todayIn } from "@/domain/dates";
 import type { Account, AccountEntry } from "@/domain/ledger";
 import type { Cents } from "@/domain/money";
 import type { TimelineCard } from "@/domain/timeline";
+import { signImages } from "./cards";
 
 export interface Profile {
   id: string;
@@ -30,9 +32,10 @@ async function must<T>(p: PromiseLike<{ data: T | null; error: { message: string
   return data as T;
 }
 
-export async function loadProfile(supabase: SupabaseClient): Promise<Profile> {
+/** Perfil do usuário — buscado uma vez por requisição, mesmo se layout e página pedirem. */
+export const loadProfile = cache(async (supabase: SupabaseClient): Promise<Profile> => {
   return must(supabase.from("profiles").select("*").single());
-}
+});
 
 /**
  * Carrega todos os dados necessários para as projeções e mapeia para o domínio.
@@ -119,6 +122,7 @@ export async function loadDashboardInput(
     color: a.color as string,
     isDemo: Boolean(a.is_demo),
   }));
+  const urls = await signImages(supabase, cards.flatMap((k) => [k.logo_path as string | null, k.art_path as string | null]));
   const cardMeta: CardMeta[] = cards.map((k) => ({
     id: k.id as string,
     name: (k.nickname as string) || (k.name as string),
@@ -127,6 +131,9 @@ export async function loadDashboardInput(
     lastFour: (k.last_four as string | null) ?? null,
     color: k.color as string,
     limit: c(k.limit_cents),
+    institutionKey: (k.institution_key as string | null) ?? null,
+    logoUrl: k.logo_path ? urls.get(k.logo_path as string) ?? null : null,
+    artUrl: k.art_path ? urls.get(k.art_path as string) ?? null : null,
   }));
   const categoryMeta: CategoryMeta[] = categories.map((x) => ({
     id: x.id as string,

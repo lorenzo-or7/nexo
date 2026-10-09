@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Panel, PanelHeader } from "@/components/ui/card";
 import { Money } from "@/components/money";
@@ -8,8 +8,8 @@ import { formatDateBR } from "@/domain/dates";
 import { formatBRL } from "@/domain/money";
 import type { TimelineStatus } from "@/domain/timeline";
 import { cn } from "@/lib/cn";
-import { BalanceChart } from "./balance-chart";
-import { FinanceCard } from "./finance-card";
+import { BalanceChart } from "./balance-chart-lazy";
+import { BankCardFace } from "@/components/cards/bank-card-face";
 
 const HORIZONS = [
   { key: "month", label: "Até o fim do mês" },
@@ -90,7 +90,8 @@ export function DashboardView({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
         {/* destaque: quanto posso gastar + linha do saldo */}
-        <Panel className="overflow-hidden">
+        <Panel className="relative isolate overflow-hidden">
+          <div aria-hidden className="absolute -right-24 -top-32 -z-10 size-[26rem] rounded-full bg-[radial-gradient(closest-side,var(--accent-soft),transparent)]" />
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div>
               <p className="text-sm text-ink-2">Livre para gastar até {formatDateBR(model.horizonEnd)}</p>
@@ -165,25 +166,37 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* contas e cartões */}
-      <section aria-labelledby="carteira" className="mt-8">
-        <h2 id="carteira" className="mb-3 text-[1.0625rem] font-semibold tracking-tight">Contas e cartões</h2>
-        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
-          {model.accounts.map((a) => (
-            <FinanceCard key={a.id} color={a.color} institution={a.institution ?? "Conta"} title={a.name} amountLabel="Saldo" amount={<Money value={a.balance} />} />
-          ))}
-          {model.cards.map((c) => (
-            <FinanceCard
-              key={c.id}
-              color={c.color}
-              institution={c.institution ?? "Cartão"}
-              title={`${c.name !== c.institution ? c.name : "Crédito"}${c.lastFour ? ` •••• ${c.lastFour}` : ""}`}
-              amountLabel={INVOICE_STATUS[c.status] ?? "Fatura"}
-              amount={<Money value={c.currentInvoice} />}
-              footer={c.currentDue ? `Vence em ${formatDateBR(c.currentDue)}` : undefined}
-            />
-          ))}
+      {/* cartões */}
+      <section aria-labelledby="cartoes" className="mt-8">
+        <div className="mb-3 flex items-baseline justify-between gap-4">
+          <h2 id="cartoes" className="text-[1.0625rem] font-semibold tracking-tight">Cartões</h2>
+          <Link href="/cartoes" className="text-sm font-medium text-accent underline-offset-4 hover:underline">Gerenciar cartões</Link>
         </div>
+        <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] sm:overflow-visible sm:px-0">
+          {model.cards.map((c) => (
+            <li key={c.id} className="w-[17.5rem] shrink-0 snap-start sm:w-auto">
+              <BankCardFace
+                card={{ name: c.name, institutionKey: c.institutionKey ?? null, institutionName: c.institution, brand: c.brand, lastFour: c.lastFour, color: c.color, logoUrl: c.logoUrl, artUrl: c.artUrl }}
+              />
+              <div className="mt-3 flex items-baseline justify-between gap-3 px-1">
+                <span className="text-sm text-ink-3">{INVOICE_STATUS[c.status] ?? "Fatura"}</span>
+                <Money value={c.currentInvoice} className="font-semibold" />
+              </div>
+              <p className="px-1 text-xs text-ink-3">{c.currentDue ? `Vence em ${formatDateBR(c.currentDue)}` : "Nada a pagar agora"}</p>
+            </li>
+          ))}
+          <li className="w-[17.5rem] shrink-0 snap-start sm:w-auto">
+            <Link
+              href="/cartoes?novo=1"
+              className="grid aspect-[1.586] w-full place-items-center rounded-[18px] border-2 border-dashed border-border-strong text-ink-3 transition-colors hover:border-accent hover:text-accent"
+            >
+              <span className="flex flex-col items-center gap-2 text-sm font-medium">
+                <Plus className="size-6" />
+                Adicionar cartão
+              </span>
+            </Link>
+          </li>
+        </ul>
       </section>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:gap-6">

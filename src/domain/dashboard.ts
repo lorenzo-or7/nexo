@@ -23,6 +23,9 @@ export interface CardMeta {
   lastFour: string | null;
   color: string;
   limit: Cents;
+  institutionKey?: string | null;
+  logoUrl?: string | null;
+  artUrl?: string | null;
 }
 export interface CategoryMeta {
   id: string;

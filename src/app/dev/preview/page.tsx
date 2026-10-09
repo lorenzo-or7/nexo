@@ -26,8 +26,8 @@ export default async function Preview({ searchParams }: { searchParams: Promise<
     cards: sp.vazio
       ? []
       : [
-          { id: "card-santander", name: "Santander", institution: "Santander", brand: "visa", lastFour: "4821", color: "#6B1030", limit: 200000 as Cents },
-          { id: "card-nubank", name: "Nubank", institution: "Nubank", brand: "mastercard", lastFour: "0212", color: "#3A1B40", limit: 300000 as Cents },
+          { id: "card-santander", name: "Santander Unique", institution: "Santander", institutionKey: "santander", brand: "visa", lastFour: "4821", color: "#EC0000", limit: 200000 as Cents },
+          { id: "card-nubank", name: "Nubank Ultravioleta", institution: "Nubank", institutionKey: "nubank", brand: "mastercard", lastFour: "0212", color: "#820AD1", limit: 300000 as Cents },
         ],
     categories: [],
     reserve: 0 as Cents,

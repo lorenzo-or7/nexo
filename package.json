@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:domain": "vitest run src",
     "test:db": "vitest run supabase",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "dev:webpack": "next dev"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

@@ -1,48 +1,68 @@
 import Image from "next/image";
 import { CoinToggle } from "@/components/brand/coin-toggle";
-import { Logo } from "@/components/brand/logo";
 import { isSupabaseConfigured } from "@/lib/env";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+/** Assinatura completa da marca: símbolo, logotipo e slogan — como na identidade enviada. */
+function BrandLockup({ size = "lg" }: { size?: "lg" | "sm" }) {
+  const lg = size === "lg";
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-      <aside className="relative hidden overflow-hidden bg-plum text-blush lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <Image src="/brand/wordmark-on-dark.png" alt="NEXO" width={120} height={25} priority className="h-auto w-[120px]" />
-        <div className="relative z-10 max-w-sm">
-          <p className="text-[2.75rem] font-semibold leading-[1.05] tracking-[-0.035em]">
-            Seu dinheiro.
-            <br />
-            Tudo conectado.
-          </p>
-          <ul className="mt-10 grid gap-4 text-[0.9375rem] text-blush/75">
-            <li>Contas, cartões e faturas no mesmo lugar, sem contar a mesma compra duas vezes.</li>
-            <li>O saldo de cada dia até o fim do mês, antes de ele acontecer.</li>
-            <li>Uma resposta honesta para &ldquo;quanto posso gastar hoje?&rdquo;</li>
-          </ul>
-        </div>
-        <p className="relative z-10 text-sm text-blush/50">Seus dados ficam só na sua conta.</p>
+    <div className="flex flex-col items-center text-center">
+      <div className="relative">
+        <div aria-hidden className="absolute inset-[-30%] -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(194,15,73,0.35),transparent)] dark:bg-[radial-gradient(closest-side,rgba(194,15,73,0.45),transparent)]" />
         <Image
           src="/brand/mark-full.png"
           alt=""
           width={440}
           height={370}
           priority
-          className="pointer-events-none absolute -bottom-16 -right-24 w-[420px] [filter:drop-shadow(0_40px_80px_rgba(194,15,73,0.35))] xl:w-[480px]"
+          className={lg ? "h-auto w-[200px] xl:w-[230px]" : "h-auto w-[64px]"}
         />
+      </div>
+      <Image src="/brand/wordmark-on-light.png" alt="NEXO" width={757} height={156} priority className={`${lg ? "mt-8 w-[230px] xl:w-[260px]" : "mt-4 w-[120px]"} h-auto dark:hidden`} />
+      <Image src="/brand/wordmark-on-dark.png" alt="NEXO" width={757} height={156} priority className={`${lg ? "mt-8 w-[230px] xl:w-[260px]" : "mt-4 w-[120px]"} hidden h-auto dark:block`} />
+      <p className={`${lg ? "mt-5 text-[0.8125rem] tracking-[0.42em]" : "mt-3 text-[0.625rem] tracking-[0.36em]"} font-light text-plum/80 dark:text-blush/85`}>
+        SEU DINHEIRO. TUDO CONECTADO<span className="text-crimson dark:text-rose">●</span>
+      </p>
+    </div>
+  );
+}
+
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid min-h-dvh lg:grid-cols-2">
+      <aside className="relative hidden overflow-hidden bg-blush lg:flex lg:flex-col lg:items-center lg:justify-center lg:p-12 lg:border-r lg:border-border dark:bg-[#1d0d20]">
+        {/* textura sutil: linhas finas que lembram a fita do símbolo */}
+        <svg aria-hidden className="absolute inset-0 h-full w-full opacity-[0.5] dark:opacity-[0.35]" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <path d="M-10 85 C 30 60, 60 110, 110 40" fill="none" stroke="url(#auth-line)" strokeWidth="0.25" />
+          <path d="M-10 92 C 35 70, 65 118, 110 50" fill="none" stroke="url(#auth-line)" strokeWidth="0.18" />
+          <defs>
+            <linearGradient id="auth-line" x1="0" x2="1">
+              <stop offset="0" stopColor="#C20F49" stopOpacity="0" />
+              <stop offset="0.5" stopColor="#F25C8D" stopOpacity="0.8" />
+              <stop offset="1" stopColor="#C20F49" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <BrandLockup />
+        <p className="absolute inset-x-0 bottom-10 mx-auto max-w-sm px-6 text-center text-sm text-plum/60 dark:text-blush/55">
+          Contas, cartões e faturas no mesmo lugar, com o saldo de cada dia antes de ele acontecer.
+        </p>
       </aside>
 
-      <main className="flex flex-col px-5 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-10">
-        <div className="flex items-center justify-between">
-          <Logo className="lg:invisible" />
+      <main className="relative flex flex-col px-5 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-10">
+        <div className="flex justify-end">
           <CoinToggle />
         </div>
-        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-10">
-          {!isSupabaseConfigured() && (
-            <div role="status" className="mb-6 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning">
-              Ambiente sem Supabase configurado. Preencha <code>.env.local</code> a partir de <code>.env.example</code> para habilitar o login.
-            </div>
-          )}
+        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-8">
+          <div className="mb-10 lg:hidden">
+            <BrandLockup size="sm" />
+          </div>
           {children}
+          {!isSupabaseConfigured() && (
+            <p role="status" className="mt-8 rounded-xl border border-dashed border-border-strong px-4 py-3 text-xs leading-relaxed text-ink-3">
+              Login desativado neste ambiente: falta configurar o Supabase no arquivo <code className="text-ink-2">.env.local</code>.
+            </p>
+          )}
         </div>
       </main>
     </div>

@@ -27,10 +27,10 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // getUser() valida o token no servidor de autenticação (não confia só no cookie)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() valida a assinatura do JWT localmente (chaves públicas em cache),
+  // sem ida ao servidor de autenticação a cada navegação. Renova a sessão quando expira.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? { id: data.claims.sub } : null;
 
   if (!user && !isPublic) {
     const to = new URL("/entrar", request.url);
