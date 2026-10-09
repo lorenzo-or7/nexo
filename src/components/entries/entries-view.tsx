@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { ArrowLeftRight, ChevronLeft, ChevronRight, CreditCard, Minus, Plus, Receipt, Scale, Undo2 } from "lucide-react";
+import { ArrowLeftRight, CreditCard, Minus, Plus, Receipt, Scale, Undo2 } from "lucide-react";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/card";
-import { addMonthRef, formatMonthBR, type LocalDate } from "@/domain/dates";
+import { formatMonthBR, type LocalDate } from "@/domain/dates";
 import { STATUS_LABEL } from "@/domain/entries";
 import { sum, type Cents } from "@/domain/money";
 import type { EntryFilters, EntryRow, QuickEntryData } from "@/lib/data/ledger";
@@ -24,10 +24,6 @@ function dayHeading(d: LocalDate, today: LocalDate): string {
   return `${wd.charAt(0).toUpperCase()}${wd.slice(1)}, ${base}${y !== Number(today.slice(0, 4)) ? ` de ${y}` : ""}`;
 }
 
-function monthLabel(m: string) {
-  const [y, mm] = m.split("-").map(Number);
-  return `${MONTHS[mm - 1].charAt(0).toUpperCase()}${MONTHS[mm - 1].slice(1)} de ${y}`;
-}
 
 function iconFor(e: EntryRow) {
   if (e.purchase) return CreditCard;
@@ -71,11 +67,6 @@ export function EntriesView({
   const expenses = sum(realized.filter((e) => e.kind === "expense").map((e) => -e.amount));
   const pendingCount = entries.filter((e) => e.status !== "confirmed").length;
 
-  const href = (month: string) => {
-    const p = new URLSearchParams(Object.entries(query).filter(([, v]) => v) as [string, string][]);
-    p.set("mes", month);
-    return `${basePath}?${p.toString()}`;
-  };
 
   const groups = new Map<LocalDate, EntryRow[]>();
   for (const e of entries) groups.set(e.date, [...(groups.get(e.date) ?? []), e]);
@@ -85,18 +76,11 @@ export function EntriesView({
       <PageHeader
         title="Lançamentos"
         subtitle={filters.kind === "pending" ? "Tudo que ainda não aconteceu ou não foi confirmado." : "Tudo que entrou e saiu das suas contas."}
-        actions={
-          <nav aria-label="Mês" className="flex items-center gap-1 rounded-full border border-border bg-field/60 p-1">
-            <Button asChild variant="ghost" size="icon" className="size-9"><Link href={href(addMonthRef(filters.month, -1))} aria-label="Mês anterior"><ChevronLeft /></Link></Button>
-            <span className="min-w-36 text-center text-sm font-medium">{monthLabel(filters.month)}</span>
-            <Button asChild variant="ghost" size="icon" className="size-9"><Link href={href(addMonthRef(filters.month, 1))} aria-label="Próximo mês"><ChevronRight /></Link></Button>
-          </nav>
-        }
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="grid min-w-0 grid-cols-1 content-start gap-5">
-          <EntriesFilters accounts={data.accounts} categories={data.categories} />
+          <EntriesFilters accounts={data.accounts} categories={data.categories} today={data.today} />
 
           {entries.length === 0 ? (
             <Panel className="grid justify-items-start gap-3">
@@ -104,7 +88,7 @@ export function EntriesView({
               <p className="text-ink-2">
                 {Object.values(query).some((v, i) => v && Object.keys(query)[i] !== "mes")
                   ? "Nenhum lançamento com esses filtros."
-                  : `Nenhum lançamento em ${formatMonthBR(filters.month)}.`}
+                  : filters.month ? `Nenhum lançamento em ${formatMonthBR(filters.month)}.` : "Nenhum lançamento ainda."}
               </p>
               {data.accounts.length > 0 ? (
                 <EntryDialog data={data} defaultAccountId={filters.accountId} trigger={<Button><Plus />Novo lançamento</Button>} />
@@ -183,7 +167,7 @@ export function EntriesView({
 
         <aside className="grid content-start gap-4 xl:sticky xl:top-8 xl:self-start">
           <Panel className="grid gap-4">
-            <h2 className="text-[1.0625rem] font-semibold tracking-tight">Resumo de {formatMonthBR(filters.month)}</h2>
+            <h2 className="text-[1.0625rem] font-semibold tracking-tight">{filters.month ? `Resumo de ${formatMonthBR(filters.month)}` : "Resumo de tudo"}</h2>
             <dl className="grid gap-3 text-sm">
               <div className="flex justify-between"><dt className="text-ink-2">Receitas</dt><dd><Money value={income} className="font-semibold text-positive" /></dd></div>
               <div className="flex justify-between"><dt className="text-ink-2">Despesas</dt><dd><Money value={expenses} className="font-semibold text-negative" /></dd></div>
@@ -194,7 +178,7 @@ export function EntriesView({
           </Panel>
           {pendingCount > 0 && filters.kind !== "pending" && (
             <Link href={`${basePath}?tipo=pending`} className="rounded-[var(--radius-card)] border border-dashed border-border-strong px-5 py-4 text-sm text-ink-2 hover:border-accent hover:text-ink">
-              <span className="font-semibold text-ink">{pendingCount} {pendingCount === 1 ? "lançamento pendente" : "lançamentos pendentes"}</span> neste mês. Ver todos os pendentes
+              <span className="font-semibold text-ink">{pendingCount} {pendingCount === 1 ? "lançamento pendente" : "lançamentos pendentes"}</span>{filters.month ? " neste mês" : ""}. Ver todos os pendentes
             </Link>
           )}
         </aside>

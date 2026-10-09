@@ -94,15 +94,16 @@ export interface EntryRow {
 }
 
 export interface EntryFilters {
-  month: string; // YYYY-MM
+  /** YYYY-MM; ausente = todos os meses */
+  month?: string;
   accountId?: string;
   kind?: "income" | "expense" | "transfer" | "pending";
   categoryId?: string;
   q?: string;
 }
 
-export function parseFilters(sp: Record<string, string | undefined>, today: LocalDate): EntryFilters {
-  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mes ?? "") ? sp.mes! : today.slice(0, 7);
+export function parseFilters(sp: Record<string, string | undefined>): EntryFilters {
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mes ?? "") ? sp.mes! : undefined;
   const kind = (["income", "expense", "transfer", "pending"] as const).find((k) => k === sp.tipo);
   const uuid = /^[0-9a-f-]{36}$/i;
   return {
@@ -119,18 +120,20 @@ export function monthRange(month: string): { from: LocalDate; to: LocalDate } {
   return { from: clampedDate(y, m, 1), to: clampedDate(y, m, daysInMonth(y, m)) };
 }
 
-/** Lançamentos do mês com filtros. Pendentes: todos os não realizados até o fim do mês. */
+export const ENTRY_LIMIT = 1000;
+
+/** Lançamentos com filtros. Sem mês: todos, do mais recente ao mais antigo. */
 export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, categories: CategoryOption[] = []): Promise<EntryRow[]> {
-  const { from, to } = monthRange(f.month);
+  const range = f.month ? monthRange(f.month) : null;
   let query = supabase
     .from("account_entries")
     .select("id,version,occurred_on,kind,status,amount_cents,description,account_id,category_id,payment_method,notes,transfer_id,card_id,invoice_ref")
     .is("deleted_at", null)
-    .lte("occurred_on", to)
     .order("occurred_on", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(1000);
-  query = f.kind === "pending" ? query.neq("status", "confirmed") : query.gte("occurred_on", from);
+    .limit(ENTRY_LIMIT);
+  if (range) query = query.gte("occurred_on", range.from).lte("occurred_on", range.to);
+  if (f.kind === "pending") query = query.neq("status", "confirmed");
   if (f.kind === "income") query = query.in("kind", ["income", "refund"]);
   if (f.kind === "expense") query = query.in("kind", ["expense"]);
   if (f.kind === "transfer") query = query.eq("kind", "transfer");
@@ -206,9 +209,9 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       .from("purchases")
       .select("id,version,card_id,description,category_id,purchased_on,total_cents,installment_count,first_invoice_ref,notes,status")
       .is("deleted_at", null)
-      .gte("purchased_on", from)
-      .lte("purchased_on", to)
-      .limit(1000);
+      .order("purchased_on", { ascending: false })
+      .limit(ENTRY_LIMIT);
+    if (range) pq = pq.gte("purchased_on", range.from).lte("purchased_on", range.to);
     if (f.categoryId) {
       const ids = [f.categoryId, ...categories.filter((c) => c.parentId === f.categoryId).map((c) => c.id)];
       pq = pq.in("category_id", ids);

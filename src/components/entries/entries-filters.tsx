@@ -1,5 +1,6 @@
 "use client";
-import { Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { addMonthRef } from "@/domain/dates";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Picker } from "@/components/ui/picker";
@@ -7,7 +8,7 @@ import type { AccountOption, CategoryOption } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
 
 /** Filtros na URL (dá para voltar, recarregar e compartilhar o link). */
-export function EntriesFilters({ accounts, categories }: { accounts: AccountOption[]; categories: CategoryOption[] }) {
+export function EntriesFilters({ accounts, categories, today }: { accounts: AccountOption[]; categories: CategoryOption[]; today: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -29,7 +30,16 @@ export function EntriesFilters({ accounts, categories }: { accounts: AccountOpti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const active = ["conta", "tipo", "categoria", "q"].some((k) => sp.get(k));
+  const active = ["mes", "conta", "tipo", "categoria", "q"].some((k) => sp.get(k));
+  const month = sp.get("mes") ?? "";
+  // de 2 meses à frente até 3 anos atrás (inclui o mês escolhido se estiver fora)
+  const monthOptions = Array.from({ length: 39 }, (_, i) => addMonthRef(today.slice(0, 7), 2 - i));
+  if (month && !monthOptions.includes(month)) monthOptions.push(month);
+  const monthLabel = (m: string) => {
+    const [y, mm] = m.split("-").map(Number);
+    const name = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][mm - 1];
+    return `${name} de ${y}`;
+  };
 
   return (
     <div className={cn("grid min-w-0 grid-cols-1 gap-3 transition-opacity", pending && "opacity-60")}>
@@ -45,6 +55,26 @@ export function EntriesFilters({ accounts, categories }: { accounts: AccountOpti
         />
       </label>
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        <div className="flex shrink-0 items-center gap-1">
+          {month && (
+            <button type="button" onClick={() => set("mes", addMonthRef(month, -1))} aria-label="Mês anterior" className="grid size-10 place-items-center rounded-full border border-border-strong bg-field text-ink-2 hover:border-accent hover:text-ink">
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
+          <Picker
+            aria-label="Mês"
+            variant="pill"
+            value={month}
+            onValueChange={(v) => set("mes", v)}
+            options={[{ value: "", label: "Todos os meses" }, ...monthOptions.sort().reverse().map((m) => ({ value: m, label: monthLabel(m), group: m.slice(0, 4) }))]}
+            className={cn(month && "border-accent/60 text-ink")}
+          />
+          {month && (
+            <button type="button" onClick={() => set("mes", addMonthRef(month, 1))} aria-label="Próximo mês" className="grid size-10 place-items-center rounded-full border border-border-strong bg-field text-ink-2 hover:border-accent hover:text-ink">
+              <ChevronRight className="size-4" />
+            </button>
+          )}
+        </div>
         <Picker
           aria-label="Tipo"
           variant="pill"
@@ -84,7 +114,6 @@ export function EntriesFilters({ accounts, categories }: { accounts: AccountOpti
             onClick={() => {
               setQ("");
               const next = new URLSearchParams();
-              if (sp.get("mes")) next.set("mes", sp.get("mes")!);
               start(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
             }}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink"

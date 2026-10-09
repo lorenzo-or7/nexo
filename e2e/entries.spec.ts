@@ -92,3 +92,18 @@ test("compra no crédito aparece no extrato e só pode ser excluída", async ({ 
   await page.getByRole("button", { name: "Excluir Booster box" }).click();
   await expect(page.getByRole("dialog")).toContainText("sai das faturas do cartão");
 });
+
+test("extrato mostra todos os meses; filtro de mês é opcional", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await expect(page.getByRole("combobox", { name: "Mês" })).toContainText("Todos os meses");
+  await expect(page.getByRole("heading", { name: "Resumo de tudo" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Mês" }).click();
+  await page.getByRole("option", { name: "Setembro de 2026" }).click();
+  await expect(page).toHaveURL(/mes=2026-09/);
+  await expect(page.getByText("Nenhum lançamento em set/2026.")).toBeVisible();
+  await page.getByRole("button", { name: "Próximo mês" }).click();
+  await expect(page).toHaveURL(/mes=2026-10/);
+  await expect(page.getByText("Mercado do mês")).toBeVisible();
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(page).not.toHaveURL(/mes=/);
+});

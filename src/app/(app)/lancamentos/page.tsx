@@ -11,7 +11,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const supabase = await createClient();
   const profile = await loadProfile(supabase);
   const data = await loadQuickEntryData(supabase, profile);
-  const filters = parseFilters(sp, data.today);
+  const filters = parseFilters(sp);
   const entries = await loadEntries(supabase, filters, data.categories);
   const query = { mes: sp.mes, conta: sp.conta, tipo: sp.tipo, categoria: sp.categoria, q: sp.q };
   return <EntriesView entries={entries} filters={filters} data={data} query={query} />;
