@@ -1,26 +1,138 @@
 @import "tailwindcss";
 
+/* --------------------------------------------------------------------------
+   NEXO design tokens
+   Marca: #241127 (principal) · #C20F49 (secundária) · #F7EDF3 (clara) · #F25C8D (destaque)
+   Modo escuro: #241127 domina os fundos; #C20F49 nos elementos interativos.
+   Modo claro: #241127 vira tinta/ação primária; #C20F49 permanece o acento.
+   -------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --brand-plum: #241127;
+  --brand-crimson: #c20f49;
+  --brand-blush: #f7edf3;
+  --brand-rose: #f25c8d;
+
+  /* claro */
+  --bg: #fbf6f9;
+  --surface: #ffffff;
+  --surface-2: #f7edf3;
+  --surface-3: #efdfe8;
+  --border: #ead9e3;
+  --border-strong: #d9c0cf;
+  --ink: #241127;
+  --ink-2: #5a4560;
+  --ink-3: #8a7590;
+  --primary: #241127;
+  --primary-ink: #f7edf3;
+  --accent: #c20f49;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe1ea;
+  --focus: #c20f49;
+  --positive: #0f7a55;
+  --positive-soft: #dcf3ea;
+  --negative: #c20f49;
+  --warning: #9a5b00;
+  --warning-soft: #fdf0d9;
+  --sidebar: #ffffff;
+  --shadow: 0 1px 2px rgb(36 17 39 / 0.05), 0 8px 24px -12px rgb(36 17 39 / 0.12);
+  --chart-grid: #ead9e3;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #241127;
+  --surface: #2d1631;
+  --surface-2: #371d3b;
+  --surface-3: #432647;
+  --border: rgb(247 237 243 / 0.08);
+  --border-strong: rgb(247 237 243 / 0.16);
+  --ink: #f7edf3;
+  --ink-2: #cbb6c8;
+  --ink-3: #9b849b;
+  --primary: #c20f49;
+  --primary-ink: #ffffff;
+  --accent: #f25c8d;
+  --accent-ink: #241127;
+  --accent-soft: rgb(194 15 73 / 0.18);
+  --focus: #f25c8d;
+  --positive: #5fd4a8;
+  --positive-soft: rgb(95 212 168 / 0.12);
+  --negative: #f25c8d;
+  --warning: #f3b75a;
+  --warning-soft: rgb(243 183 90 / 0.12);
+  --sidebar: #1d0d20;
+  --shadow: 0 1px 0 rgb(247 237 243 / 0.04) inset, 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --chart-grid: rgb(247 237 243 / 0.07);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-sidebar: var(--sidebar);
+  --color-plum: var(--brand-plum);
+  --color-crimson: var(--brand-crimson);
+  --color-blush: var(--brand-blush);
+  --color-rose: var(--brand-rose);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 1.25rem;
+  --radius-control: 0.75rem;
+  --shadow-card: var(--shadow);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--bg);
 }
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* troca de tema suave apenas durante a alternância (evita transições em todo hover) */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: background-color 420ms ease, border-color 420ms ease, color 420ms ease, fill 420ms ease,
+    stroke 420ms ease, box-shadow 420ms ease !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }

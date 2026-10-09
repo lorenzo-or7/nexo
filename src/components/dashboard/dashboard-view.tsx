@@ -1,0 +1,258 @@
+import Link from "next/link";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard } from "lucide-react";
+import { PageHeader } from "@/components/shell/app-shell";
+import { Panel, PanelHeader } from "@/components/ui/card";
+import { Money } from "@/components/money";
+import type { DashboardModel } from "@/domain/dashboard";
+import { formatDateBR } from "@/domain/dates";
+import { formatBRL } from "@/domain/money";
+import type { TimelineStatus } from "@/domain/timeline";
+import { cn } from "@/lib/cn";
+import { BalanceChart } from "./balance-chart";
+import { FinanceCard } from "./finance-card";
+
+const HORIZONS = [
+  { key: "month", label: "Até o fim do mês" },
+  { key: "30", label: "30 dias" },
+  { key: "60", label: "60 dias" },
+  { key: "90", label: "90 dias" },
+] as const;
+
+const STATUS: Record<TimelineStatus, { label: string; className: string }> = {
+  realized: { label: "Realizada", className: "bg-surface-2 text-ink-2" },
+  confirmed: { label: "Confirmada", className: "bg-surface-2 text-ink-2" },
+  expected: { label: "Prevista", className: "border border-dashed border-border-strong text-ink-2" },
+  late: { label: "Atrasada", className: "bg-warning-soft text-warning" },
+  hypothetical: { label: "Simulação", className: "bg-accent-soft text-accent" },
+};
+
+const INVOICE_STATUS: Record<string, string> = {
+  open: "Fatura aberta",
+  closed: "Fatura fechada",
+  overdue: "Fatura vencida",
+  paid: "Sem fatura a pagar",
+};
+
+const short = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+export function DashboardView({
+  model,
+  horizon,
+  basePath = "/",
+  name,
+  emptyState,
+  demoNotice,
+}: {
+  model: DashboardModel;
+  horizon: string;
+  basePath?: string;
+  name: string;
+  emptyState?: React.ReactNode;
+  demoNotice?: React.ReactNode;
+}) {
+  const t = model.totals;
+  const greeting = `Olá, ${name}`;
+
+  if (!model.hasData) {
+    return (
+      <>
+        <PageHeader title={greeting} subtitle="Vamos montar seu panorama financeiro." />
+        {emptyState}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={greeting}
+        subtitle={`Hoje é ${formatDateBR(model.today)}`}
+        actions={
+          <nav aria-label="Período da projeção" className="flex rounded-full border border-border bg-surface p-1">
+            {HORIZONS.map((h) => (
+              <Link
+                key={h.key}
+                href={h.key === "month" ? basePath : `${basePath}?h=${h.key}`}
+                aria-current={horizon === h.key ? "true" : undefined}
+                className={cn(
+                  "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
+                  horizon === h.key ? "bg-primary text-primary-ink" : "text-ink-2 hover:text-ink",
+                )}
+              >
+                {h.label}
+              </Link>
+            ))}
+          </nav>
+        }
+      />
+
+      {demoNotice}
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
+        {/* destaque: quanto posso gastar + linha do saldo */}
+        <Panel className="overflow-hidden">
+          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+            <div>
+              <p className="text-sm text-ink-2">Livre para gastar até {formatDateBR(model.horizonEnd)}</p>
+              <p className={cn("mt-1 text-[2.75rem] font-semibold leading-none tracking-[-0.045em] sm:text-[3.25rem]", t.free < 0 && "text-negative")}>
+                <Money value={t.free} />
+              </p>
+              <p className="mt-3 max-w-md text-sm text-ink-3">
+                É o menor saldo previsto no período{t.reserve > 0 ? `, já descontada a reserva de ${formatBRL(t.reserve)}` : ""}. Gastar mais do que isso hoje deixaria algum dia no vermelho.
+              </p>
+            </div>
+            <div className="flex gap-8 text-sm">
+              <div>
+                <p className="text-ink-3">Menor saldo</p>
+                <p className="font-semibold"><Money value={t.lowest} /> <span className="font-normal text-ink-3">em {short(t.lowestDate)}</span></p>
+              </div>
+              <div>
+                <p className="text-ink-3">Fim do período</p>
+                <p className="font-semibold"><Money value={t.projected} /></p>
+              </div>
+            </div>
+          </div>
+
+          {t.firstNegativeDate && (
+            <p role="alert" className="mt-5 flex items-start gap-2 rounded-xl bg-accent-soft px-4 py-3 text-sm text-negative">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              O saldo previsto fica negativo em {formatDateBR(t.firstNegativeDate)}, mesmo que termine o período em <Money value={t.projected} />.
+            </p>
+          )}
+
+          <div className="-mx-2 mt-6">
+            <BalanceChart series={model.series} reserve={t.reserve} />
+          </div>
+        </Panel>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-6">
+          <Panel>
+            <p className="text-sm text-ink-2">Saldo em conta hoje</p>
+            <p className="mt-1 text-[2rem] font-semibold tracking-[-0.035em]"><Money value={t.bankBalance} /></p>
+            <p className="mt-1 text-sm text-ink-3">Só o que já entrou e saiu de verdade.</p>
+            {model.accounts.length > 0 && (
+              <ul className="mt-4 grid gap-2 border-t border-border pt-4">
+                {model.accounts.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: a.color }} />
+                      <span className="truncate text-ink-2">{a.name}</span>
+                    </span>
+                    <Money value={a.balance} className="font-medium" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <Panel className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm text-ink-2"><ArrowDownLeft className="size-4 text-positive" />A receber</p>
+              <p className="mt-1 text-xl font-semibold"><Money value={t.toReceive} /></p>
+            </div>
+            <div>
+              <p className="flex items-center gap-1.5 text-sm text-ink-2"><ArrowUpRight className="size-4 text-negative" />A pagar</p>
+              <p className="mt-1 text-xl font-semibold"><Money value={t.toPay} /></p>
+            </div>
+            <div>
+              <p className="text-sm text-ink-2">Faturas abertas</p>
+              <p className="mt-1 font-semibold"><Money value={t.openInvoices} /></p>
+            </div>
+            <div>
+              <p className="text-sm text-ink-2">Fechadas a pagar</p>
+              <p className="mt-1 font-semibold"><Money value={t.closedUnpaid} /></p>
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      {/* contas e cartões */}
+      <section aria-labelledby="carteira" className="mt-8">
+        <h2 id="carteira" className="mb-3 text-[1.0625rem] font-semibold tracking-tight">Contas e cartões</h2>
+        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
+          {model.accounts.map((a) => (
+            <FinanceCard key={a.id} color={a.color} institution={a.institution ?? "Conta"} title={a.name} amountLabel="Saldo" amount={<Money value={a.balance} />} />
+          ))}
+          {model.cards.map((c) => (
+            <FinanceCard
+              key={c.id}
+              color={c.color}
+              institution={c.institution ?? "Cartão"}
+              title={`${c.name !== c.institution ? c.name : "Crédito"}${c.lastFour ? ` •••• ${c.lastFour}` : ""}`}
+              amountLabel={INVOICE_STATUS[c.status] ?? "Fatura"}
+              amount={<Money value={c.currentInvoice} />}
+              footer={c.currentDue ? `Vence em ${formatDateBR(c.currentDue)}` : undefined}
+            />
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:gap-6">
+        <Panel>
+          <PanelHeader title="Próximos vencimentos" description={`Até ${formatDateBR(model.horizonEnd)}`} />
+          {model.upcoming.length === 0 ? (
+            <p className="text-sm text-ink-3">Nada previsto para o período.</p>
+          ) : (
+            <ol className="grid">
+              {model.upcoming.map((u, i) => (
+                <li key={i} className="flex items-center gap-3 border-t border-border py-3 first:border-t-0 first:pt-0">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">
+                    {u.label.startsWith("Fatura") ? <CreditCard className="size-[18px]" /> : <CalendarClock className="size-[18px]" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[0.9375rem] font-medium">{u.label}</span>
+                    <span className="mt-0.5 flex items-center gap-2 text-xs text-ink-3">
+                      {formatDateBR(u.date)}
+                      <span className={cn("rounded-full px-2 py-0.5", STATUS[u.status].className)}>{STATUS[u.status].label}</span>
+                      {u.originalDate && <span>desde {short(u.originalDate)}</span>}
+                    </span>
+                  </span>
+                  <Money value={u.amount} tone="flow" signed className="text-[0.9375rem] font-semibold" />
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Este mês" description="Consumo pela data da compra; pagamento de fatura não conta de novo." />
+          <dl className="grid grid-cols-2 gap-4">
+            <div>
+              <dt className="text-sm text-ink-2">Receitas recebidas</dt>
+              <dd className="mt-1 text-xl font-semibold"><Money value={t.monthIncome} /></dd>
+            </div>
+            <div>
+              <dt className="text-sm text-ink-2">Despesas</dt>
+              <dd className="mt-1 text-xl font-semibold"><Money value={t.monthExpenses} /></dd>
+            </div>
+          </dl>
+          {model.byCategory.length > 0 && (
+            <ul className="mt-5 grid gap-3">
+              {model.byCategory.slice(0, 5).map((c) => {
+                const pct = t.monthExpenses > 0 ? Math.round((c.amount / t.monthExpenses) * 100) : 0;
+                return (
+                  <li key={c.name} className="grid gap-1.5">
+                    <span className="flex justify-between text-sm"><span>{c.name}</span><Money value={c.amount} className="text-ink-2" /></span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <h3 className="mb-2 mt-6 text-sm font-semibold text-ink-2">Últimas movimentações</h3>
+          {model.recent.length === 0 ? (
+            <p className="text-sm text-ink-3">Nenhuma movimentação realizada ainda.</p>
+          ) : (
+            <ul>
+              {model.recent.map((r) => (
+                <li key={r.id} className="flex justify-between gap-3 border-t border-border py-2.5 text-sm first:border-t-0">
+                  <span className="min-w-0 truncate">{r.label}<span className="ml-2 text-ink-3">{short(r.date)}</span></span>
+                  <Money value={r.amount} tone="flow" signed />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </>
+  );
+}
