@@ -66,19 +66,3 @@ export function FormMessage({ tone, children }: { tone: "error" | "success"; chi
   );
 }
 
-export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(function Select(
-  { className, ...props },
-  ref,
-) {
-  return (
-    <select
-      ref={ref}
-      className={cn(
-        "h-12 w-full rounded-[var(--radius-control)] border border-border-strong bg-surface px-4 text-base text-ink",
-        "transition-[border-color,box-shadow] focus:border-accent focus:shadow-[0_0_0_4px_var(--accent-soft)] focus:outline-none",
-        className,
-      )}
-      {...props}
-    />
-  );
-});

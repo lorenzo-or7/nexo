@@ -7,7 +7,8 @@ test("adicionar cartão: prévia acompanha o formulário", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Adicionar cartão" });
   await expect(dialog).toBeVisible();
 
-  await dialog.getByLabel("Instituição").selectOption("santander");
+  await dialog.getByRole("combobox", { name: "Instituição" }).click();
+  await page.getByRole("option", { name: "Santander" }).click();
   await dialog.getByLabel("Nome do cartão", { exact: true }).fill("Santander Free");
   await dialog.getByLabel("Final do cartão (opcional)").fill("12ab345");
   await expect(dialog.getByLabel("Final do cartão (opcional)")).toHaveValue("1234"); // só dígitos, no máximo 4

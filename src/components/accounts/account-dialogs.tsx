@@ -4,7 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 import { adjustBalance, removeAccount, saveAccount, type AccountActionResult } from "@/app/(app)/contas/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Field, FormMessage, Input, Select } from "@/components/ui/field";
+import { Field, FormMessage, Input } from "@/components/ui/field";
+import { Picker } from "@/components/ui/picker";
 import { useToast } from "@/components/ui/toast";
 import { ACCOUNT_TYPES, BANKS, bankByKey } from "@/domain/banks";
 import type { LocalDate } from "@/domain/dates";
@@ -62,26 +63,23 @@ function AccountForm({ account, today, onDone }: { account?: EditableAccount; to
       {state && !state.ok && !state.field && <FormMessage tone="error">{state.error}</FormMessage>}
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Instituição" htmlFor="institution_key">
-          <Select
+          <Picker
             id="institution_key"
             name="institution_key"
             value={institution}
-            onChange={(e) => {
-              setInstitution(e.target.value);
-              setColor(bankByKey(e.target.value).color);
-              if (!name || BANKS.some((b) => b.name === name)) setName(e.target.value === "outro" ? "" : bankByKey(e.target.value).name);
+            onValueChange={(v) => {
+              setInstitution(v);
+              setColor(bankByKey(v).color);
+              if (!name || BANKS.some((b) => b.name === name)) setName(v === "outro" ? "" : bankByKey(v).name);
             }}
-          >
-            {BANKS.map((b) => <option key={b.key} value={b.key}>{b.key === "outro" ? "Outra / Carteira" : b.name}</option>)}
-          </Select>
+            options={BANKS.map((b) => ({ value: b.key, label: b.key === "outro" ? "Outra / Carteira" : b.name, color: b.color }))}
+          />
         </Field>
         <Field label="Nome da conta" htmlFor="name" error={errorFor("name")}>
           <Input id="name" name="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} required placeholder={preset.key === "outro" ? "Ex.: Carteira" : preset.name} />
         </Field>
         <Field label="Tipo" htmlFor="account_type">
-          <Select id="account_type" name="account_type" defaultValue={account?.type ?? "checking"}>
-            {ACCOUNT_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-          </Select>
+          <Picker id="account_type" name="account_type" defaultValue={account?.type ?? "checking"} options={ACCOUNT_TYPES.map((t) => ({ value: t.key, label: t.label }))} />
         </Field>
         <Field label="Cor" htmlFor="color-picker">
           <div className="flex h-12 items-center gap-2">

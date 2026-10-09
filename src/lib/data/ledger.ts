@@ -20,17 +20,31 @@ export interface CategoryOption {
   parentId: string | null;
   kind: "expense" | "income";
 }
+export interface CardOption {
+  id: string;
+  name: string;
+  institution: string | null;
+  color: string;
+  closingDay: number;
+  dueDay: number;
+  closingToDueMonths: 0 | 1 | null;
+  closingDayRule: "next_invoice" | "current_invoice";
+  overrides: Record<string, { closingDate?: string; dueDate?: string }>;
+}
 export interface QuickEntryData {
   today: LocalDate;
   accounts: AccountOption[];
   categories: CategoryOption[];
+  cards: CardOption[];
 }
 
 /** Dados do formulário de lançamento (usados em todas as páginas). */
 export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile: Profile): Promise<QuickEntryData> => {
-  const [acc, cat] = await Promise.all([
+  const [acc, cat, cards, overrides] = await Promise.all([
     supabase.from("accounts").select("id,name,nickname,institution,color,opening_date").is("archived_at", null).order("sort_order").order("created_at"),
     supabase.from("categories").select("id,name,parent_id,kind,sort_order").is("archived_at", null).order("sort_order"),
+    supabase.from("cards").select("id,name,nickname,institution,color,closing_day,due_day,closing_to_due_months,closing_day_rule").is("archived_at", null).order("sort_order").order("created_at"),
+    supabase.from("invoice_overrides").select("card_id,invoice_ref,closing_date,due_date"),
   ]);
   if (acc.error || cat.error) throw new Error(`Falha ao carregar contas e categorias: ${(acc.error ?? cat.error)!.message}`);
   return {
@@ -43,6 +57,19 @@ export const loadQuickEntryData = cache(async (supabase: SupabaseClient, profile
       openingDate: a.opening_date,
     })),
     categories: (cat.data ?? []).map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id, kind: c.kind })),
+    cards: (cards.data ?? []).map((k) => ({
+      id: k.id,
+      name: k.nickname || k.name,
+      institution: k.institution,
+      color: k.color,
+      closingDay: k.closing_day,
+      dueDay: k.due_day,
+      closingToDueMonths: k.closing_to_due_months,
+      closingDayRule: k.closing_day_rule,
+      overrides: Object.fromEntries(
+        (overrides.data ?? []).filter((o) => o.card_id === k.id).map((o) => [o.invoice_ref, { closingDate: o.closing_date ?? undefined, dueDate: o.due_date ?? undefined }]),
+      ),
+    })),
   };
 });
 

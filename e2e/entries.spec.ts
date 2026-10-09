@@ -8,9 +8,11 @@ test("novo lançamento: data futura vira agendada; transferência pede De e Para
   const dialog = page.getByRole("dialog", { name: "Novo lançamento" });
   await expect(dialog.getByLabel("Valor")).toBeFocused();
 
-  await expect(dialog.getByLabel("Situação")).toHaveValue("confirmed");
+  const status = dialog.locator("input[name=status]");
+  await expect(status).toHaveValue("confirmed");
   await dialog.getByLabel("Data").fill("2026-10-25");
-  await expect(dialog.getByLabel("Situação")).toHaveValue("scheduled");
+  await expect(status).toHaveValue("scheduled");
+  await expect(dialog.getByRole("combobox", { name: "Situação" })).toContainText("Agendada");
 
   await dialog.getByRole("radio", { name: "Receita" }).click();
   await expect(dialog.getByLabel("Entra na conta")).toBeVisible();
@@ -51,6 +53,34 @@ test("contas: total, ajustar saldo e nova conta", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Nova conta" }).click();
   const dialog = page.getByRole("dialog", { name: "Nova conta" });
-  await dialog.getByLabel("Instituição").selectOption("santander");
+  await dialog.getByRole("combobox", { name: "Instituição" }).click();
+  await page.getByRole("option", { name: "Santander" }).click();
   await expect(dialog.getByLabel("Nome da conta")).toHaveValue("Santander");
+});
+
+test("forma de pagamento crédito: escolhe cartão, parcelas e mostra a fatura", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Novo lançamento" });
+  await dialog.getByLabel("Valor").fill("100,00");
+  await dialog.getByRole("combobox", { name: "Forma de pagamento" }).click();
+  await page.getByRole("option", { name: /Crédito/ }).click();
+  await expect(dialog.getByRole("combobox", { name: "Cartão" })).toContainText("Nubank Ultravioleta");
+  await expect(dialog.getByRole("combobox", { name: "Sai da conta" })).toHaveCount(0);
+  await dialog.getByRole("combobox", { name: "Parcelas" }).click();
+  await page.getByRole("option", { name: "3x", exact: true }).click();
+  await expect(dialog.getByText(/3x de R\$ 33,34/)).toBeVisible();
+  await expect(dialog.getByText(/a última de R\$ 33,33/)).toBeVisible();
+  await expect(dialog.getByText(/fatura de out\/2026/)).toBeVisible();
+});
+
+test("receita não oferece crédito", async ({ page }) => {
+  await page.goto("/dev/preview/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Novo lançamento" });
+  await dialog.getByRole("radio", { name: "Receita" }).click();
+  await dialog.getByRole("button", { name: "Mais detalhes" }).click();
+  await dialog.getByRole("combobox", { name: "Forma de recebimento" }).click();
+  await expect(page.getByRole("option", { name: "Pix" })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Crédito/ })).toHaveCount(0);
 });

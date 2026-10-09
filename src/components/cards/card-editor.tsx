@@ -6,7 +6,8 @@ import { useActionState, useEffect, useState } from "react";
 import { saveCard, type CardActionResult } from "@/app/(app)/cartoes/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Field, FormMessage, Input, Select } from "@/components/ui/field";
+import { Field, FormMessage, Input } from "@/components/ui/field";
+import { Picker } from "@/components/ui/picker";
 import { useToast } from "@/components/ui/toast";
 import { BANKS, CARD_BRANDS, bankByKey } from "@/domain/banks";
 import { formatBRL, type Cents } from "@/domain/money";
@@ -123,29 +124,22 @@ function CardForm({ card, accounts, onDone }: { card?: EditableCard; accounts: {
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Instituição" htmlFor="institution_key">
-            <Select
+            <Picker
               id="institution_key"
               name="institution_key"
               value={institution}
-              onChange={(e) => {
-                setInstitution(e.target.value);
-                setColor(bankByKey(e.target.value).color);
+              onValueChange={(v) => {
+                setInstitution(v);
+                setColor(bankByKey(v).color);
               }}
-            >
-              {BANKS.map((b) => (
-                <option key={b.key} value={b.key}>{b.name}</option>
-              ))}
-            </Select>
+              options={BANKS.map((b) => ({ value: b.key, label: b.name, color: b.color }))}
+            />
           </Field>
           <Field label="Nome do cartão" htmlFor="name" error={errorFor("name")}>
             <Input id="name" name="name" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder={`Ex.: ${preset.key === "outro" ? "Cartão principal" : preset.name + " Platinum"}`} />
           </Field>
           <Field label="Bandeira" htmlFor="brand">
-            <Select id="brand" name="brand" value={brand} onChange={(e) => setBrand(e.target.value)}>
-              {CARD_BRANDS.map((b) => (
-                <option key={b.key} value={b.key}>{b.label}</option>
-              ))}
-            </Select>
+            <Picker id="brand" name="brand" value={brand} onValueChange={setBrand} options={CARD_BRANDS.map((b) => ({ value: b.key, label: b.label }))} />
           </Field>
           <Field label="Final do cartão (opcional)" htmlFor="last_four" error={errorFor("last_four")}>
             <Input
@@ -162,12 +156,12 @@ function CardForm({ card, accounts, onDone }: { card?: EditableCard; accounts: {
             <Input id="limit" name="limit" inputMode="decimal" placeholder="0,00" defaultValue={card && card.limit > 0 ? formatBRL(card.limit).replace("R$ ", "") : ""} />
           </Field>
           <Field label="Conta que paga a fatura" htmlFor="payment_account_id">
-            <Select id="payment_account_id" name="payment_account_id" defaultValue={card?.paymentAccountId ?? ""}>
-              <option value="">{accounts.length ? "Escolher depois" : "Nenhuma conta cadastrada"}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </Select>
+            <Picker
+              id="payment_account_id"
+              name="payment_account_id"
+              defaultValue={card?.paymentAccountId ?? ""}
+              options={[{ value: "", label: accounts.length ? "Escolher depois" : "Nenhuma conta cadastrada" }, ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+            />
           </Field>
           <Field label="Dia do fechamento" htmlFor="closing_day" error={errorFor("closing_day")}>
             <Input id="closing_day" name="closing_day" inputMode="numeric" required defaultValue={card?.closingDay ?? ""} placeholder="Ex.: 13" />
@@ -178,10 +172,15 @@ function CardForm({ card, accounts, onDone }: { card?: EditableCard; accounts: {
         </div>
 
         <Field label="Compra feita no dia do fechamento" htmlFor="closing_day_rule">
-          <Select id="closing_day_rule" name="closing_day_rule" defaultValue={card?.closingDayRule ?? "next_invoice"}>
-            <option value="next_invoice">Vai para a próxima fatura (mais comum)</option>
-            <option value="current_invoice">Entra na fatura que está fechando</option>
-          </Select>
+          <Picker
+            id="closing_day_rule"
+            name="closing_day_rule"
+            defaultValue={card?.closingDayRule ?? "next_invoice"}
+            options={[
+              { value: "next_invoice", label: "Vai para a próxima fatura", hint: "mais comum" },
+              { value: "current_invoice", label: "Entra na fatura que está fechando" },
+            ]}
+          />
         </Field>
 
         <fieldset className="grid gap-2">

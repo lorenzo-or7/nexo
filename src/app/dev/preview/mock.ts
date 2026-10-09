@@ -22,6 +22,9 @@ export const quickEntry: QuickEntryData = {
     { id: CAT.receitas, name: "Receitas", parentId: null, kind: "income" },
     { id: CAT.salario, name: "Salário", parentId: CAT.receitas, kind: "income" },
   ],
+  cards: [
+    { id: "00000000-0000-4000-8000-0000000000d1", name: "Nubank Ultravioleta", institution: "Nubank", color: "#820AD1", closingDay: 13, dueDay: 20, closingToDueMonths: null, closingDayRule: "next_invoice", overrides: {} },
+  ],
 };
 
 const base = { version: 1, paymentMethod: null, notes: null, tags: [] as string[], transfer: null, cardId: null, invoiceRef: null };

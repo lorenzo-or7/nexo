@@ -3,6 +3,7 @@ import { useActionState, useEffect } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
+import { Picker } from "@/components/ui/picker";
 import { useToast } from "@/components/ui/toast";
 import { clearDemo, deleteAccount, loadDemo, saveProfile, type ActionResult } from "@/app/(app)/actions";
 
@@ -74,14 +75,7 @@ export function ProfileForm({
           <Input id="display_name" name="display_name" defaultValue={initial.display_name} required />
         </Field>
         <Field label="Fuso horário" htmlFor="timezone">
-          <select
-            id="timezone"
-            name="timezone"
-            defaultValue={initial.timezone}
-            className="h-12 w-full rounded-[var(--radius-control)] border border-border-strong bg-surface px-3 text-base text-ink focus:border-accent focus:outline-none"
-          >
-            {TZ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+          <Picker id="timezone" name="timezone" defaultValue={initial.timezone} options={TZ.map(([v, l]) => ({ value: v, label: l }))} />
         </Field>
         <Field label="Reserva mínima" htmlFor="reserve">
           <Input id="reserve" name="reserve" inputMode="decimal" placeholder="0,00" defaultValue={initial.reserve} />

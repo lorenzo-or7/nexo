@@ -123,6 +123,13 @@ html.theme-switching *::after {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+/* campos de texto já mostram o foco na própria borda: sem contorno extra */
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button[role="combobox"]:focus-visible {
+  outline: none;
+}
 
 .tabular {
   font-variant-numeric: tabular-nums;

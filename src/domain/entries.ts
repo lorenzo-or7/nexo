@@ -22,6 +22,7 @@ export const STATUS_LABEL: Record<EntryStatus, string> = {
 };
 
 export const PAYMENT_METHODS = [
+  { key: "credit", label: "Crédito" },
   { key: "pix", label: "Pix" },
   { key: "debit", label: "Débito" },
   { key: "cash", label: "Dinheiro" },
@@ -78,4 +79,21 @@ export function parseTags(input: string): string[] {
 /** Texto de busca seguro para filtros do PostgREST. */
 export function sanitizeSearch(q: string): string {
   return q.replace(/[,()%*\\:"']/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+/** Configuração de fatura a partir dos dados do cartão (formulário e servidor usam a mesma regra). */
+export function billingConfigOf(card: {
+  closingDay: number;
+  dueDay: number;
+  closingToDueMonths: 0 | 1 | null;
+  closingDayRule: "next_invoice" | "current_invoice";
+  overrides?: Record<string, { closingDate?: string; dueDate?: string }>;
+}) {
+  return {
+    closingDay: card.closingDay,
+    dueDay: card.dueDay,
+    closingToDueMonths: card.closingToDueMonths ?? undefined,
+    closingDayRule: card.closingDayRule,
+    overrides: card.overrides,
+  };
 }
