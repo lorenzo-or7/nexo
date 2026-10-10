@@ -8,6 +8,7 @@ import type { Account, AccountEntry } from "@/domain/ledger";
 import type { Cents } from "@/domain/money";
 import type { TimelineCard } from "@/domain/timeline";
 import { signImages } from "./cards";
+import { loadSubscriptionRows, projectSubscriptions } from "./subscriptions";
 
 export interface Profile {
   id: string;
@@ -83,6 +84,9 @@ export async function loadDashboardInput(
     invoiceRef: (e.invoice_ref as string | null) ?? undefined,
   }));
 
+  // assinaturas: cobranças futuras entram na projeção (as vencidas já foram lançadas)
+  const subRows = (await loadSubscriptionRows(supabase).catch(() => null)) ?? [];
+  const configs = new Map<string, CardBillingConfig>();
   const timelineCards: TimelineCard[] = cards.map((k) => {
     const config: CardBillingConfig = {
       closingDay: k.closing_day as number,
@@ -95,6 +99,7 @@ export async function loadDashboardInput(
           .map((o) => [o.invoice_ref as string, { closingDate: (o.closing_date as string) ?? undefined, dueDate: (o.due_date as string) ?? undefined }]),
       ),
     };
+    configs.set(k.id as string, config);
     const cardCharges: CardCharge[] = charges
       .filter((x) => x.card_id === k.id)
       .map((x) => ({
@@ -120,6 +125,12 @@ export async function loadDashboardInput(
       payments,
     };
   });
+
+  const projected = projectSubscriptions(subRows, today, configs);
+  domainEntries.push(...projected.entries.filter((e) => domainAccounts.some((a) => a.id === e.accountId)));
+  for (const t of timelineCards) {
+    t.charges = [...t.charges, ...projected.cardCharges.filter((x) => x.cardId === t.id)];
+  }
 
   const accountMeta: AccountMeta[] = accounts.map((a) => ({
     id: a.id as string,

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Tags } from "lucide-react";
+import { Repeat, Tags } from "lucide-react";
 import { PageHeader } from "@/components/shell/app-shell";
 import { DeleteAccountForm, DemoClear, DemoLoader, ExportButton, ProfileForm } from "@/components/settings/forms";
 import { Panel, PanelHeader } from "@/components/ui/card";
@@ -33,6 +33,16 @@ export default async function SettingsPage() {
               include_expected_income: profile.include_expected_income,
             }}
           />
+        </Panel>
+        <Panel className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Assinaturas</h2>
+            <p className="mt-0.5 text-sm text-ink-3">Streaming, apps e tudo o que renova sozinho.</p>
+          </div>
+          <Link href="/assinaturas" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-control)] border border-border-strong bg-field/60 px-4 text-[0.9375rem] font-medium hover:border-accent/60 hover:bg-surface-2">
+            <Repeat className="size-4" />
+            Gerenciar assinaturas
+          </Link>
         </Panel>
         <Panel className="flex flex-wrap items-center justify-between gap-4">
           <div>

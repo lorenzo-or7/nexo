@@ -1,6 +1,7 @@
 import type { Cents } from "@/domain/money";
 import type { AccountListItem } from "@/lib/data/accounts";
 import type { EntryRow, QuickEntryData } from "@/lib/data/ledger";
+import type { SubscriptionRow } from "@/lib/data/subscriptions";
 
 /** Dados fictícios SOMENTE para a prévia de desenvolvimento (NEXO_DEV_PREVIEW=1). */
 export const TODAY = "2026-10-09";
@@ -45,3 +46,31 @@ export const accounts: AccountListItem[] = [
   { id: B, name: "Santander", institutionKey: "santander", institutionName: "Santander", type: "checking", color: "#EC0000", openingBalance: 0 as Cents, openingDate: "2026-10-01", balance: 10000 as Cents, projected: -2000 as Cents, pending: 1, paysCards: [] },
   { id: "00000000-0000-4000-8000-0000000000a3", name: "Carteira", institutionKey: "outro", institutionName: null, type: "cash", color: "#0E7A38", openingBalance: 5000 as Cents, openingDate: "2026-10-01", balance: 5000 as Cents, projected: 5000 as Cents, pending: 0, paysCards: [] },
 ];
+
+/** Assinaturas fictícias da prévia. */
+export function subscriptionRows(): SubscriptionRow[] {
+  const row = (id: string, name: string, amount: number, start: string, over: Partial<Omit<SubscriptionRow, "sub">> & { sub?: Partial<SubscriptionRow["sub"]> } = {}): SubscriptionRow => {
+    const { sub, ...rest } = over;
+    return {
+      sub: { id, name, rule: { frequency: "monthly", interval: 1, startDate: start }, prices: [{ effectiveFrom: start, amount: amount as Cents }], status: "active", ...sub },
+      payWith: "card",
+      cardId: "00000000-0000-4000-8000-0000000000d1",
+      accountId: null,
+      categoryId: null,
+      color: null,
+      renewalAlertDays: 3,
+      chargedThrough: "2026-10-09",
+      keys: new Set(),
+      charges: [],
+      ...rest,
+    };
+  };
+  return [
+    row("00000000-0000-4000-8000-0000000000f1", "Netflix", 4490, "2026-08-11", { charges: [{ periodKey: "2026-08", dueOn: "2026-08-11", amount: 4490 as Cents }, { periodKey: "2026-09", dueOn: "2026-09-11", amount: 4490 as Cents }], keys: new Set(["2026-08", "2026-09"]) }),
+    row("00000000-0000-4000-8000-0000000000f2", "Spotify", 2190, "2026-07-25", { payWith: "account", cardId: null, accountId: "00000000-0000-4000-8000-0000000000a1", color: "#2F9E44" }),
+    row("00000000-0000-4000-8000-0000000000f3", "ChatGPT Plus", 11000, "2026-09-20"),
+    row("00000000-0000-4000-8000-0000000000f4", "Domínio do site", 6000, "2026-03-02", { sub: { rule: { frequency: "yearly", interval: 1, startDate: "2026-03-02" } } }),
+    row("00000000-0000-4000-8000-0000000000f5", "Academia", 9990, "2026-05-05", { sub: { status: "paused", pausedFrom: "2026-09-01" } }),
+    row("00000000-0000-4000-8000-0000000000f6", "Globoplay", 2290, "2026-01-10", { sub: { status: "cancelled", cancelledAt: "2026-06-30" } }),
+  ];
+}

@@ -520,3 +520,37 @@ describe("categorias do usuário", () => {
     await expect(as(BOB, () => q(`select remove_category($1)`, [usada]))).rejects.toThrow(/não encontrada/);
   });
 });
+
+describe("assinaturas: salvar, cobrar e excluir", () => {
+  const save = (uid: string, id: string | null, amount: number, start: string, acc: string, from: string | null = null) =>
+    as(uid, async () => (await one<{ id: string }>(
+      `select save_subscription($1, 'Streaming', null, 'monthly', 1::smallint, $2::date, 'account', null, $3, $4, $5::date) as id`,
+      [id, start, acc, amount, from],
+    )).id);
+
+  it("cria com preço; editar muda o preço a partir da data", async () => {
+    const acc = await newAccount(ALICE, "Assin conta", 10000);
+    const id = await save(ALICE, null, 3990, "2026-10-15", acc);
+    expect(await as(ALICE, () => q(`select amount_cents::int as a from subscription_prices where subscription_id = $1`, [id]))).toEqual([{ a: 3990 }]);
+    await save(ALICE, id, 4490, "2026-10-15", acc, "2026-11-15");
+    const prices = await as(ALICE, () => q<{ f: string; a: number }>(`select effective_from::text as f, amount_cents::int as a from subscription_prices where subscription_id = $1 order by 1`, [id]));
+    expect(prices).toEqual([{ f: "2026-10-15", a: 3990 }, { f: "2026-11-15", a: 4490 }]);
+    await expect(save(ALICE, id, 0, "2026-10-15", acc)).rejects.toThrow(/Valor inválido/);
+    await expect(save(BOB, id, 100, "2026-10-15", acc)).rejects.toThrow();
+  });
+
+  it("cobrança vira lançamento uma vez só; excluir com cobrança cancela", async () => {
+    const acc = await newAccount(ALICE, "Assin conta 2", 10000);
+    const id = await save(ALICE, null, 2000, "2026-10-01", acc);
+    for (let i = 0; i < 2; i++) await as(ALICE, () => q(`select record_subscription_charge($1, '2026-10', '2026-10-01', 2000, null, 'confirmed')`, [id]));
+    expect(await balance(ALICE, acc)).toBe(8000);
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_subscription($1, '2026-10-10') as r`, [id]))).r).toBe("cancelled");
+    const s = await as(ALICE, () => one<{ status: string; c: string }>(`select status, cancelled_at::text as c from subscriptions where id = $1`, [id]));
+    expect(s).toEqual({ status: "cancelled", c: "2026-10-10" });
+    // o lançamento continua
+    expect(await balance(ALICE, acc)).toBe(8000);
+
+    const vazia = await save(ALICE, null, 500, "2026-12-01", acc);
+    expect((await as(ALICE, () => one<{ r: string }>(`select remove_subscription($1, '2026-10-10') as r`, [vazia]))).r).toBe("deleted");
+  });
+});

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CreditCard, LayoutDashboard, Settings, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, CreditCard, LayoutDashboard, Repeat, Settings, Tags, Wallet, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -15,6 +15,7 @@ export const NAV: NavItem[] = [
   { href: "/lancamentos", label: "Lançamentos", short: "Extrato", icon: ArrowLeftRight },
   { href: "/contas", label: "Contas", short: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", short: "Cartões", icon: CreditCard },
+  { href: "/assinaturas", label: "Assinaturas", short: "Assinaturas", icon: Repeat, desktopOnly: true },
   { href: "/categorias", label: "Categorias", short: "Categorias", icon: Tags, desktopOnly: true },
   { href: "/configuracoes", label: "Configurações", short: "Ajustes", icon: Settings },
 ];

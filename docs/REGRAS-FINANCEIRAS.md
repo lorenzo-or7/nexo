@@ -68,6 +68,13 @@ Estas regras estão implementadas em `src/domain/` (funções puras, sem banco) 
 - Cada ocorrência tem uma **chave de período** (`YYYY-MM` mensal, `YYYY` anual, segunda-feira da semana, ou a data). `UNIQUE(subscription_id, period_key)` no banco: gerar duas vezes, gerar com intervalos sobrepostos ou mudar o dia de cobrança no meio do mês **não duplica**. [6]
 - Mudança de preço vale a partir de `effective_from`; pausa e cancelamento interrompem ocorrências.
 
+**Na prática (tela Assinaturas)**
+- Cobrança com data até hoje vira lançamento automaticamente ao abrir o app: no cartão, uma compra 1x na fatura certa; na conta, uma despesa realizada. `charged_through` guarda até que dia isso já foi feito.
+- Cobranças futuras entram só na **projeção** (linha do tempo e "livre para gastar").
+- Pausar: nada é cobrado até retomar; os dias pausados não são cobrados depois. Cancelar: para a partir do dia; o histórico fica. Excluir sem cobranças apaga; com cobranças, cancela.
+- Mudar o valor vale a partir da data informada (histórico em `subscription_prices`).
+- Custo por mês = soma do equivalente mensal das ativas (anual ÷ 12, trimestral ÷ 3, semanal × 52 ÷ 12), arredondamento half-even.
+
 ## 7. Simulador
 
 Recebe compras à vista, no crédito (com parcelas) ou novas assinaturas e devolve saldo antes/depois, impacto por fatura, impacto mensal, menor saldo e alertas. Trabalha sobre cópias em memória: **nada é gravado** sem confirmação explícita.
