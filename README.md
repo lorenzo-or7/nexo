@@ -1,4 +1,37 @@
-# NEXO — Seu dinheiro. Tudo conectado.
+<p align="center">
+  <img src="public/brand/wordmark-on-dark.png" width="220" alt="NEXO" />
+</p>
+
+<h3 align="center">Seu dinheiro. Tudo conectado.</h3>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-040607?style=for-the-badge&logo=nextdotjs&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/React-040607?style=for-the-badge&logo=react&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/TypeScript-040607?style=for-the-badge&logo=typescript&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-040607?style=for-the-badge&logo=tailwindcss&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/Supabase-040607?style=for-the-badge&logo=supabase&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/Vitest-040607?style=for-the-badge&logo=vitest&logoColor=BF40FA" />
+  <img src="https://img.shields.io/badge/Playwright-040607?style=for-the-badge&logo=playwright&logoColor=BF40FA" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.webp" width="90%" alt="Visão geral do NEXO" />
+</p>
+
+<table align="center">
+  <tr>
+    <td><img src="docs/screenshots/lancamentos.webp" alt="Lançamentos" /></td>
+    <td><img src="docs/screenshots/cartoes.webp" alt="Cartões e faturas" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/assinaturas.webp" alt="Assinaturas" /></td>
+    <td><img src="docs/screenshots/categorias.webp" alt="Categorias" /></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Telas da prévia de desenvolvimento, com dados fictícios.</sub></p>
+
+---
 
 Gestão financeira pessoal: contas, cartões, faturas, parcelamentos, assinaturas e a projeção do saldo dia a dia.
 
@@ -76,3 +109,20 @@ docs/              regras financeiras e arquitetura
 ```
 
 Veja [docs/REGRAS-FINANCEIRAS.md](docs/REGRAS-FINANCEIRAS.md) e [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+
+---
+
+## 👨‍💻 Autor
+
+<p>
+  Feito por <b>Lorenzo Orsetti</b><br/>
+  <a href="https://lorenzo-or7.github.io">
+    <img src="https://img.shields.io/badge/Portf%C3%B3lio-BF40FA?style=for-the-badge&logo=googlechrome&logoColor=040607" />
+  </a>
+  <a href="https://www.linkedin.com/in/lorenzo-orsetti-031906349/">
+    <img src="https://img.shields.io/badge/LinkedIn-040607?style=for-the-badge&logo=linkedin&logoColor=BF40FA" />
+  </a>
+  <a href="https://github.com/lorenzo-or7">
+    <img src="https://img.shields.io/badge/GitHub-040607?style=for-the-badge&logo=github&logoColor=BF40FA" />
+  </a>
+</p>
