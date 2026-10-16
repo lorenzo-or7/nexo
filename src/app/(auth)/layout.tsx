@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandImages } from "@/components/brand/logo";
+import { DeveloperSignature } from "@/components/brand/developer-signature";
 import { CoinToggle } from "@/components/brand/coin-toggle";
 import { SetupGuide } from "@/components/setup/setup-guide";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -67,6 +68,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </p>
           )}
         </div>
+        <DeveloperSignature size="sm" className="pt-2" />
       </main>
     </div>
   );

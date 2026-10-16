@@ -33,7 +33,7 @@ Múltiplas contas e transferências · cartões, faturas e compras parceladas ·
 ## Pendências para o responsável
 
 1. **Preço / gratuidade** — a resposta do FAQ diz apenas que ainda não há planos publicados (`faq.tsx`, marcada `REVISAR`). Atualize quando houver decisão.
-2. **Política de privacidade e Termos de uso** — não existem; o rodapé não tem esses links. Crie as páginas e adicione os links.
+2. **Política de privacidade e Termos de uso** — não existem. Quando forem criados, preencha `src/lib/legal.ts` e os links aparecem sozinhos no rodapé, no login e no cadastro (ver `docs/SEGURANCA.md`).
 3. **Imagem de compartilhamento (Open Graph)** — usa `icon-512.png`. Uma arte 1200×630 da marca melhoraria a prévia em redes sociais.
 4. A afirmação de segurança do FAQ se limita ao que está implementado (isolamento por conta com RLS, exportação e exclusão); não cita certificações.
 
@@ -50,3 +50,11 @@ npm run build                    # build de produção
 ## Deploy
 
 Mesmo fluxo de sempre: `git push` na branch principal e a Vercel publica. Não há variável nova; opcionalmente defina `NEXT_PUBLIC_SITE_URL=https://nexo-gamma-one.vercel.app` (ou o domínio próprio) para o canonical, o sitemap e o Open Graph.
+
+## Adendo: privacidade, segurança e marca OR7
+
+- `src/components/brand/developer-signature.tsx` (`DeveloperSignature`): assinatura OR7 com o arquivo original (`public/brand/or7-assinatura.png`, recortado das margens, sem filtros) sobre a própria superfície preta da arte. Usada em um único lugar por layout: rodapé da landing, layout de autenticação (login e cadastro) e `AppShell` (páginas internas).
+- `src/components/legal/privacy-notice.tsx`: aviso "Sua privacidade importa." com referência à LGPD e indicadores verificados, no login e no cadastro. `secure-badge.tsx` só mostra "Conexão protegida por HTTPS" quando a página abriu por HTTPS.
+- `src/lib/legal.ts`: endereços da Política de Privacidade e dos Termos (hoje vazios).
+- Auditoria completa em `docs/SEGURANCA.md`.
+- Testes: `e2e/signature.spec.ts`, `src/lib/__tests__/legal.test.ts`.

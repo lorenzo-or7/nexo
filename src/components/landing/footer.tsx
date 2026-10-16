@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { DeveloperSignature } from "@/components/brand/developer-signature";
 import { Logo } from "@/components/brand/logo";
+import { legalLinks } from "@/lib/legal";
 
-/** Sem links para política de privacidade ou termos: esses documentos ainda não existem (pendência registrada). */
+/** Links legais só aparecem quando os documentos existem (src/lib/legal.ts). Pendência registrada em docs/LANDING.md. */
 export function LandingFooter() {
   const year = new Date().getFullYear();
+  const legal = legalLinks();
   return (
     <footer className="border-t border-border">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-8 md:grid-cols-[1.4fr_1fr_1fr]">
@@ -21,9 +24,15 @@ export function LandingFooter() {
           <p className="font-semibold">Sua conta</p>
           <Link href="/entrar" className="text-ink-2 hover:text-ink">Entrar</Link>
           <Link href="/cadastro" className="text-ink-2 hover:text-ink">Criar conta</Link>
+          {legal.map((l) => (
+            <Link key={l.href} href={l.href} className="text-ink-2 hover:text-ink">{l.label}</Link>
+          ))}
         </nav>
       </div>
-      <p className="mx-auto max-w-6xl px-5 pb-10 text-xs text-ink-3 sm:px-8">© {year} NEXO. Todos os direitos reservados.</p>
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-5 pb-10 sm:px-8 md:flex-row md:justify-between">
+        <p className="text-xs text-ink-3">© {year} NEXO. Todos os direitos reservados.</p>
+        <DeveloperSignature size="sm" />
+      </div>
     </footer>
   );
 }

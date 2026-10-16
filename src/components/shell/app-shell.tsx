@@ -5,6 +5,7 @@ import { Ellipsis, LogOut } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { CoinToggle } from "@/components/brand/coin-toggle";
+import { DeveloperSignature } from "@/components/brand/developer-signature";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/cn";
 import type { PaletteId } from "@/lib/theme/palettes";
@@ -117,7 +118,9 @@ export function AppShell({
           <CoinToggle />
         </header>
 
-        <main className="rise w-full max-w-[1520px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-9">{children}</main>
+        <main className="rise w-full max-w-[1520px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-9">{children}
+          <DeveloperSignature size="sm" className="mt-14" />
+        </main>
       </div>
 
       {quickEntry && <QuickEntryButton data={quickEntry} variant="fab" />}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrivacyNotice } from "@/components/legal/privacy-notice";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { requestPasswordReset, signIn, signUp, updatePassword, type FormState } from "./actions";
 
@@ -49,6 +50,7 @@ export function SignInForm({ next, linkError }: { next?: string; linkError?: boo
         </Field>
         <Button type="submit" size="lg" loading={pending} className="mt-2">Entrar</Button>
       </form>
+      <PrivacyNotice />
     </>
   );
 }
@@ -80,6 +82,7 @@ export function SignUpForm() {
         </Field>
         <Button type="submit" size="lg" loading={pending} className="mt-2">Criar conta</Button>
       </form>
+      <PrivacyNotice />
     </>
   );
 }
