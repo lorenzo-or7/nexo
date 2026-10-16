@@ -1,8 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { LANDING_PATH, shouldShowLanding } from "@/lib/landing/routing";
 import { SUPABASE_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev", "/diagnostico"];
+const PUBLIC_PATHS = [LANDING_PATH, "/robots.txt", "/sitemap.xml", "/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev", "/diagnostico"];
 
 export async function middleware(request: NextRequest) {
   const url = SUPABASE_URL;
@@ -12,6 +13,7 @@ export async function middleware(request: NextRequest) {
 
   if (!isSupabaseConfigured()) {
     // sem configuração: só as páginas públicas funcionam (exibem o aviso de configuração)
+    if (shouldShowLanding(pathname, false)) return NextResponse.rewrite(new URL(LANDING_PATH, request.url));
     if (isPublic) return NextResponse.next();
     return NextResponse.redirect(new URL("/entrar", request.url));
   }
@@ -33,6 +35,12 @@ export async function middleware(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims?.sub ? { id: data.claims.sub } : null;
 
+  // visitante na raiz: página inicial pública (reescrita; a URL continua "/")
+  if (shouldShowLanding(pathname, !!user)) {
+    const landing = NextResponse.rewrite(new URL(LANDING_PATH, request.url));
+    for (const cookie of response.cookies.getAll()) landing.cookies.set(cookie);
+    return landing;
+  }
   if (!user && !isPublic) {
     const to = new URL("/entrar", request.url);
     if (pathname !== "/") to.searchParams.set("next", pathname);

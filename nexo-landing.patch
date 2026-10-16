@@ -1,0 +1,1825 @@
+From 0a03ad3aaea9e47a03f052c803af6eddcee135ae Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 16 Oct 2026 01:01:28 -0300
+Subject: [PATCH] =?UTF-8?q?feat:=20landing=20page=20p=C3=BAblica=20interat?=
+ =?UTF-8?q?iva=20(hero,=20benef=C3=ADcios,=20bento,=20simulador,=20painel?=
+ =?UTF-8?q?=20demo,=20FAQ)=20servida=20em=20/=20para=20visitantes?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Fkt9U37Kmg3JNhNYXfmu7o
+---
+ docs/LANDING.md                               |  52 ++++
+ e2e/landing.spec.ts                           | 111 +++++++++
+ src/app/(landing)/bem-vindo/page.tsx          |  54 +++++
+ src/app/globals.css                           |  62 +++++
+ src/app/robots.ts                             |   9 +
+ src/app/sitemap.ts                            |   7 +
+ src/components/landing/benefits.tsx           |  70 ++++++
+ src/components/landing/bento.tsx              | 104 ++++++++
+ src/components/landing/dashboard-preview.tsx  | 102 ++++++++
+ src/components/landing/faq.tsx                |  57 +++++
+ src/components/landing/final-cta.tsx          |  28 +++
+ src/components/landing/footer.tsx             |  29 +++
+ src/components/landing/header.tsx             |  94 ++++++++
+ src/components/landing/hero.tsx               |  51 ++++
+ src/components/landing/mini-chart.tsx         |  32 +++
+ src/components/landing/product-demo.tsx       | 226 ++++++++++++++++++
+ src/components/landing/reveal.tsx             |  38 +++
+ src/components/landing/section.tsx            |  12 +
+ src/components/landing/simulator.tsx          | 180 ++++++++++++++
+ src/components/landing/tilt-frame.tsx         |  32 +++
+ src/components/landing/use-animated-number.ts |  32 +++
+ src/lib/landing/__tests__/simulation.test.ts  |  75 ++++++
+ src/lib/landing/routing.ts                    |  10 +
+ src/lib/landing/simulation.ts                 |  97 ++++++++
+ src/lib/landing/site.ts                       |   5 +
+ src/middleware.ts                             |  10 +-
+ 26 files changed, 1578 insertions(+), 1 deletion(-)
+ create mode 100644 docs/LANDING.md
+ create mode 100644 e2e/landing.spec.ts
+ create mode 100644 src/app/(landing)/bem-vindo/page.tsx
+ create mode 100644 src/app/robots.ts
+ create mode 100644 src/app/sitemap.ts
+ create mode 100644 src/components/landing/benefits.tsx
+ create mode 100644 src/components/landing/bento.tsx
+ create mode 100644 src/components/landing/dashboard-preview.tsx
+ create mode 100644 src/components/landing/faq.tsx
+ create mode 100644 src/components/landing/final-cta.tsx
+ create mode 100644 src/components/landing/footer.tsx
+ create mode 100644 src/components/landing/header.tsx
+ create mode 100644 src/components/landing/hero.tsx
+ create mode 100644 src/components/landing/mini-chart.tsx
+ create mode 100644 src/components/landing/product-demo.tsx
+ create mode 100644 src/components/landing/reveal.tsx
+ create mode 100644 src/components/landing/section.tsx
+ create mode 100644 src/components/landing/simulator.tsx
+ create mode 100644 src/components/landing/tilt-frame.tsx
+ create mode 100644 src/components/landing/use-animated-number.ts
+ create mode 100644 src/lib/landing/__tests__/simulation.test.ts
+ create mode 100644 src/lib/landing/routing.ts
+ create mode 100644 src/lib/landing/simulation.ts
+ create mode 100644 src/lib/landing/site.ts
+
+diff --git a/docs/LANDING.md b/docs/LANDING.md
+new file mode 100644
+index 0000000..f9b2f7c
+--- /dev/null
++++ b/docs/LANDING.md
+@@ -0,0 +1,52 @@
++# Página inicial pública
++
++## Como ela entra no sistema
++
++- A página vive em **`/bem-vindo`** (`src/app/(landing)/bem-vindo/page.tsx`).
++- O `middleware.ts` a serve em **`/`** só para quem **não tem sessão** (reescrita interna: a URL continua `/`). Quem tem sessão continua indo direto ao painel; nenhuma rota protegida mudou.
++- Regra isolada e testada em `src/lib/landing/routing.ts`.
++- Login (`/entrar`) e cadastro (`/cadastro`) são as rotas já existentes; os botões apontam para elas.
++- `/robots.txt` e `/sitemap.xml` são gerados por `src/app/robots.ts` e `src/app/sitemap.ts` (URL base: `NEXT_PUBLIC_SITE_URL`, com `https://nexo-gamma-one.vercel.app` como padrão).
++
++## Componentes (`src/components/landing`)
++
++| Arquivo | Papel |
++|---|---|
++| `header.tsx` | Cabeçalho, menu mobile acessível, alternador de tema |
++| `hero.tsx`, `dashboard-preview.tsx`, `tilt-frame.tsx` | Primeira dobra e prévia do painel (dados fictícios, SVG estático) |
++| `benefits.tsx` | Três pilares |
++| `bento.tsx` | Grid de funcionalidades (só o que existe de verdade) |
++| `simulator.tsx` + `src/lib/landing/simulation.ts` | Simulador de 30 dias (lógica pura e testada) |
++| `product-demo.tsx` | Amostra interativa do painel (saldo, entradas e saídas, categorias), dados fictícios |
++| `faq.tsx` | Perguntas frequentes (accordion acessível) |
++| `final-cta.tsx`, `footer.tsx` | Fechamento e rodapé |
++| `reveal.tsx`, `use-animated-number.ts`, `mini-chart.tsx` | Animação ao rolar, número animado, helpers de SVG |
++
++Nada na landing consulta o banco, usa sessão, chama endpoints privados ou importa componentes do painel. Os gráficos são SVG puro (sem Recharts), então a página carrega pouco JavaScript.
++
++## Funcionalidades confirmadas no código
++
++Múltiplas contas e transferências · cartões, faturas e compras parceladas · assinaturas · renda fixa (salário e mensalidades) · categorias com cor · projeção do saldo com menor saldo e "livre para gastar" · exportar dados e excluir conta · tema claro/escuro e paletas · uso no celular.
++
++**Não existe:** integração automática com bancos, orçamentos, metas, notificações. Por isso não aparecem na página.
++
++## Pendências para o responsável
++
++1. **Preço / gratuidade** — a resposta do FAQ diz apenas que ainda não há planos publicados (`faq.tsx`, marcada `REVISAR`). Atualize quando houver decisão.
++2. **Política de privacidade e Termos de uso** — não existem; o rodapé não tem esses links. Crie as páginas e adicione os links.
++3. **Imagem de compartilhamento (Open Graph)** — usa `icon-512.png`. Uma arte 1200×630 da marca melhoraria a prévia em redes sociais.
++4. A afirmação de segurança do FAQ se limita ao que está implementado (isolamento por conta com RLS, exportação e exclusão); não cita certificações.
++
++## Como rodar e testar
++
++```bash
++npm run dev                      # abre http://localhost:3000 (sem sessão, "/" mostra a landing)
++npm test                         # testes de unidade (inclui o simulador e a regra da rota)
++NEXO_DEV_PREVIEW=1 npx next dev --turbopack -p 3100
++npx playwright test e2e/landing.spec.ts   # testes de tela da landing
++npm run build                    # build de produção
++```
++
++## Deploy
++
++Mesmo fluxo de sempre: `git push` na branch principal e a Vercel publica. Não há variável nova; opcionalmente defina `NEXT_PUBLIC_SITE_URL=https://nexo-gamma-one.vercel.app` (ou o domínio próprio) para o canonical, o sitemap e o Open Graph.
+diff --git a/e2e/landing.spec.ts b/e2e/landing.spec.ts
+new file mode 100644
+index 0000000..d6e5091
+--- /dev/null
++++ b/e2e/landing.spec.ts
+@@ -0,0 +1,111 @@
++import { expect, test } from "@playwright/test";
++
++/**
++ * Página inicial pública. Rodam contra o servidor de desenvolvimento (sem login):
++ * a raiz sem sessão mostra a landing e as rotas protegidas continuam protegidas.
++ */
++test("[landing] raiz pública com título, CTAs e rotas reais de login e cadastro", async ({ page }) => {
++  await page.goto("/");
++  await expect(page.getByRole("heading", { level: 1 })).toContainText("Seu dinheiro.");
++  await expect(page.getByRole("link", { name: "Começar agora" })).toHaveAttribute("href", "/cadastro");
++  await expect(page.getByRole("link", { name: "Criar minha conta" })).toHaveAttribute("href", "/cadastro");
++  await expect(page).toHaveTitle(/NEXO/);
++  await expect(page.locator("link[rel=canonical]")).toHaveCount(1);
++});
++
++test("[landing] login e cadastro continuam funcionando e rotas protegidas seguem protegidas", async ({ page }) => {
++  expect((await page.goto("/entrar"))?.status()).toBe(200);
++  expect((await page.goto("/cadastro"))?.status()).toBe(200);
++  await page.goto("/contas");
++  await expect(page).toHaveURL(/\/entrar/);
++  await page.goto("/configuracoes");
++  await expect(page).toHaveURL(/\/entrar/);
++});
++
++test("[landing] robots e sitemap públicos", async ({ request }) => {
++  expect((await request.get("/robots.txt")).status()).toBe(200);
++  const sitemap = await request.get("/sitemap.xml");
++  expect(sitemap.status()).toBe(200);
++  expect(await sitemap.text()).toContain("/cadastro");
++});
++
++test("[landing] simulador: inicial 6.300, negativo, zerado e sem enviar nada", async ({ page }) => {
++  const writes: string[] = [];
++  page.on("request", (r) => {
++    if (r.method() !== "GET") writes.push(`${r.method()} ${r.url()}`);
++  });
++  await page.goto("/");
++  const status = page.getByRole("status");
++  await page.locator("#sim-initial-n").scrollIntoViewIfNeeded();
++  await expect(status).toContainText("sobe R$");
++  await expect(page.getByText("R$ 6.300,00").first()).toBeVisible();
++
++  await page.locator("#sim-initial-n").fill("1000");
++  await page.locator("#sim-income-n").fill("0");
++  await page.locator("#sim-expense-n").fill("3000");
++  await expect(status).toContainText("cai R$ 3.000,00");
++  await expect(status).toContainText("fica negativo");
++  await expect(page.getByText("− R$ 3.000,00").first()).toBeVisible();
++
++  await page.locator("#sim-initial-n").fill("0");
++  await page.locator("#sim-expense-n").fill("0");
++  await expect(status).toContainText("fica igual");
++
++  // texto inválido e acima do limite são contidos
++  await page.locator("#sim-initial-n").fill("abc99999999999");
++  await expect(page.locator("#sim-initial-n")).toHaveValue("1000000");
++
++  expect(writes).toEqual([]);
++});
++
++test("[landing] FAQ acessível: botões expandem e recolhem", async ({ page }) => {
++  await page.goto("/");
++  const btn = page.getByRole("button", { name: "Posso gerenciar mais de uma conta?" });
++  await btn.scrollIntoViewIfNeeded();
++  await expect(btn).toHaveAttribute("aria-expanded", "false");
++  await btn.click();
++  await expect(btn).toHaveAttribute("aria-expanded", "true");
++  await expect(page.getByText("transferir dinheiro entre as contas")).toBeVisible();
++  await btn.click();
++  await expect(btn).toHaveAttribute("aria-expanded", "false");
++});
++
++test("[landing] tema claro/escuro alterna e persiste ao recarregar", async ({ page }) => {
++  await page.goto("/");
++  const html = page.locator("html");
++  await expect(html).toHaveAttribute("data-theme", "dark");
++  await page.getByRole("button", { name: /Ativar modo claro/ }).click();
++  await expect(html).toHaveAttribute("data-theme", "light");
++  await page.waitForTimeout(800); // deixa a action gravar o cookie
++  await page.reload();
++  await expect(html).toHaveAttribute("data-theme", "light");
++});
++
++test("[landing] menu mobile abre, navega e fecha com Escape", async ({ page, isMobile }) => {
++  test.skip(!isMobile, "só no celular");
++  await page.goto("/");
++  const toggle = page.getByRole("button", { name: "Abrir menu" });
++  await expect(toggle).toHaveAttribute("aria-expanded", "false");
++  await toggle.click();
++  await expect(page.getByRole("button", { name: "Fechar menu" })).toHaveAttribute("aria-expanded", "true");
++  await expect(page.getByRole("link", { name: "Criar conta" }).last()).toBeVisible();
++  await page.keyboard.press("Escape");
++  await expect(page.getByRole("button", { name: "Abrir menu" })).toHaveAttribute("aria-expanded", "false");
++  await page.getByRole("button", { name: "Abrir menu" }).click();
++  await page.getByRole("link", { name: "FAQ" }).last().click();
++  await expect(page).toHaveURL(/#faq$/);
++});
++
++for (const size of [{ w: 360, h: 740 }, { w: 768, h: 1024 }, { w: 1440, h: 900 }, { w: 2200, h: 1200 }]) {
++  test(`[landing] sem rolagem horizontal em ${size.w}px`, async ({ page }) => {
++    await page.setViewportSize({ width: size.w, height: size.h });
++    await page.goto("/");
++    await page.waitForLoadState("networkidle");
++    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
++  });
++}
++
++test("[landing] não expõe segredos no HTML", async ({ request }) => {
++  const html = await (await request.get("/")).text();
++  expect(html).not.toMatch(/service_role|SUPABASE_SERVICE_ROLE|eyJ[A-Za-z0-9_-]{20,}\./);
++});
+diff --git a/src/app/(landing)/bem-vindo/page.tsx b/src/app/(landing)/bem-vindo/page.tsx
+new file mode 100644
+index 0000000..7fefcd4
+--- /dev/null
++++ b/src/app/(landing)/bem-vindo/page.tsx
+@@ -0,0 +1,54 @@
++import type { Metadata } from "next";
++import { Bento } from "@/components/landing/bento";
++import { Benefits } from "@/components/landing/benefits";
++import { Faq } from "@/components/landing/faq";
++import { FinalCta } from "@/components/landing/final-cta";
++import { LandingFooter } from "@/components/landing/footer";
++import { LandingHeader } from "@/components/landing/header";
++import { Hero } from "@/components/landing/hero";
++import { ProductDemo } from "@/components/landing/product-demo";
++import { SectionHeading } from "@/components/landing/section";
++import { Simulator } from "@/components/landing/simulator";
++import { siteUrl } from "@/lib/landing/site";
++
++const TITLE = "NEXO — Seu dinheiro. Tudo conectado.";
++const DESCRIPTION = "Contas, cartões, faturas, parcelamentos e a projeção do seu saldo dia a dia em um só lugar. Gestão financeira pessoal com mais clareza e controle.";
++
++export const metadata: Metadata = {
++  metadataBase: new URL(siteUrl()),
++  title: { absolute: TITLE },
++  description: DESCRIPTION,
++  alternates: { canonical: "/" },
++  openGraph: {
++    type: "website",
++    locale: "pt_BR",
++    siteName: "NEXO",
++    url: "/",
++    title: TITLE,
++    description: DESCRIPTION,
++    images: [{ url: "/brand/icon-512.png", width: 512, height: 512, alt: "NEXO" }],
++  },
++  twitter: { card: "summary", title: TITLE, description: DESCRIPTION, images: ["/brand/icon-512.png"] },
++};
++
++export default function LandingPage() {
++  return (
++    <div data-landing className="relative min-h-dvh overflow-x-clip">
++      <a href="#conteudo" className="sr-only z-50 rounded-lg bg-surface px-4 py-2 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Ir para o conteúdo</a>
++      <LandingHeader />
++      <main id="conteudo">
++        <Hero />
++        <Benefits />
++        <Bento />
++        <section id="demonstracao" aria-labelledby="titulo-demo" className="scroll-mt-20 mx-auto max-w-6xl px-5 pb-20 sm:px-8 lg:pb-28">
++          <SectionHeading id="titulo-demo" eyebrow="Demonstração" title="Veja seu dinheiro além de hoje." subtitle="Descubra como entradas e saídas podem transformar seu saldo nos próximos dias." />
++          <Simulator />
++          <ProductDemo />
++        </section>
++        <Faq />
++        <FinalCta />
++      </main>
++      <LandingFooter />
++    </div>
++  );
++}
+diff --git a/src/app/globals.css b/src/app/globals.css
+index fc2af84..8d7ce01 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -349,3 +349,65 @@ body::before {
+ }
+ 
+ }
++
++/* --------------------------------------------------------------------------
++   Página inicial pública
++   -------------------------------------------------------------------------- */
++@media (prefers-reduced-motion: no-preference) {
++  html:has([data-landing]) {
++    scroll-behavior: smooth;
++  }
++}
++
++/* entrada ao rolar: só opacidade e transform; sem JS o conteúdo fica visível */
++.reveal {
++  transition: opacity 650ms cubic-bezier(0.2, 0.7, 0.2, 1), transform 650ms cubic-bezier(0.2, 0.7, 0.2, 1);
++}
++.reveal[data-reveal="armed"] {
++  opacity: 0;
++  transform: translateY(18px);
++}
++
++/* controle deslizante do simulador */
++.sim-range {
++  -webkit-appearance: none;
++  appearance: none;
++  width: 100%;
++  height: 1.75rem;
++  background: transparent;
++  cursor: pointer;
++}
++.sim-range::-webkit-slider-runnable-track {
++  height: 6px;
++  border-radius: 999px;
++  background: linear-gradient(to right, var(--tone) var(--pct), var(--surface-3) var(--pct));
++}
++.sim-range::-moz-range-track {
++  height: 6px;
++  border-radius: 999px;
++  background: linear-gradient(to right, var(--tone) var(--pct), var(--surface-3) var(--pct));
++}
++.sim-range::-webkit-slider-thumb {
++  -webkit-appearance: none;
++  appearance: none;
++  margin-top: -8px;
++  width: 22px;
++  height: 22px;
++  border-radius: 999px;
++  background: #fff;
++  border: 3px solid var(--tone);
++  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
++}
++.sim-range::-moz-range-thumb {
++  width: 16px;
++  height: 16px;
++  border-radius: 999px;
++  background: #fff;
++  border: 3px solid var(--tone);
++  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
++}
++.sim-range:focus-visible {
++  outline: 2px solid var(--focus);
++  outline-offset: 4px;
++  border-radius: 999px;
++}
+diff --git a/src/app/robots.ts b/src/app/robots.ts
+new file mode 100644
+index 0000000..a11cbf5
+--- /dev/null
++++ b/src/app/robots.ts
+@@ -0,0 +1,9 @@
++import type { MetadataRoute } from "next";
++import { siteUrl } from "@/lib/landing/site";
++
++export default function robots(): MetadataRoute.Robots {
++  return {
++    rules: [{ userAgent: "*", allow: ["/$", "/entrar", "/cadastro"], disallow: ["/api/", "/auth/", "/dev/", "/diagnostico", "/configuracoes", "/contas", "/cartoes", "/lancamentos", "/assinaturas", "/renda-fixa", "/categorias"] }],
++    sitemap: `${siteUrl()}/sitemap.xml`,
++  };
++}
+diff --git a/src/app/sitemap.ts b/src/app/sitemap.ts
+new file mode 100644
+index 0000000..fdff76b
+--- /dev/null
++++ b/src/app/sitemap.ts
+@@ -0,0 +1,7 @@
++import type { MetadataRoute } from "next";
++import { siteUrl } from "@/lib/landing/site";
++
++export default function sitemap(): MetadataRoute.Sitemap {
++  const base = siteUrl();
++  return [{ url: `${base}/` }, { url: `${base}/entrar` }, { url: `${base}/cadastro` }];
++}
+diff --git a/src/components/landing/benefits.tsx b/src/components/landing/benefits.tsx
+new file mode 100644
+index 0000000..799a7f1
+--- /dev/null
++++ b/src/components/landing/benefits.tsx
+@@ -0,0 +1,70 @@
++import { CalendarClock, LayoutGrid, PieChart } from "lucide-react";
++import { Reveal } from "./reveal";
++import { SectionHeading } from "./section";
++
++const PILLARS = [
++  {
++    icon: LayoutGrid,
++    title: "Tudo em um só lugar",
++    text: "Organize diferentes contas, cartões e movimentações de forma centralizada.",
++    visual: (
++      <div aria-hidden className="mt-6 grid gap-2 text-xs">
++        {["Conta principal", "Reserva", "Cartão de crédito"].map((n, i) => (
++          <div key={n} className="flex items-center justify-between rounded-xl border border-border bg-field/50 px-3 py-2" style={{ marginLeft: i * 10 }}>
++            <span className="flex items-center gap-2 text-ink-2"><span className="size-2 rounded-full" style={{ background: ["var(--accent)", "var(--chart-expected)", "var(--chart-expense)"][i] }} />{n}</span>
++            <span className="h-1.5 w-14 rounded-full bg-surface-3" />
++          </div>
++        ))}
++      </div>
++    ),
++  },
++  {
++    icon: PieChart,
++    title: "Entenda seu dinheiro",
++    text: "Visualize suas despesas, compromissos e informações financeiras com mais clareza.",
++    visual: (
++      <div aria-hidden className="mt-6 grid gap-2.5 text-xs">
++        {[
++          ["Moradia", 78, "var(--accent)"],
++          ["Mercado", 46, "var(--chart-expense)"],
++          ["Transporte", 24, "var(--chart-expected)"],
++        ].map(([n, w, c]) => (
++          <div key={n as string}>
++            <div className="mb-1 flex justify-between text-ink-3"><span>{n}</span></div>
++            <div className="h-2 rounded-full bg-surface-3"><div className="h-2 rounded-full" style={{ width: `${w}%`, background: c as string }} /></div>
++          </div>
++        ))}
++      </div>
++    ),
++  },
++  {
++    icon: CalendarClock,
++    title: "Planeje o que vem pela frente",
++    text: "Antecipe o impacto de recebimentos e pagamentos futuros.",
++    visual: (
++      <div aria-hidden className="mt-6 flex items-end gap-1.5">
++        {[28, 40, 34, 52, 30, 62, 48, 70, 56, 76].map((h, i) => (
++          <span key={i} className="flex-1 rounded-t-md" style={{ height: h, background: i > 5 ? "color-mix(in oklab, var(--chart-expected) 70%, transparent)" : "var(--accent)", opacity: i > 5 ? 0.75 : 1 }} />
++        ))}
++      </div>
++    ),
++  },
++];
++
++export function Benefits() {
++  return (
++    <section aria-labelledby="titulo-beneficios" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 lg:py-28">
++      <SectionHeading id="titulo-beneficios" eyebrow="Por que o NEXO" title="Menos complicação. Mais controle." />
++      <ul className="mt-14 grid gap-5 md:grid-cols-3">
++        {PILLARS.map((p, i) => (
++          <Reveal as="li" key={p.title} delay={i * 80} className="panel group relative overflow-hidden rounded-[var(--radius-card)] p-6 transition-transform duration-300 hover:-translate-y-1 sm:p-7">
++            <span className="grid size-11 place-items-center rounded-xl bg-accent-soft text-accent"><p.icon className="size-5" aria-hidden /></span>
++            <h3 className="mt-5 text-xl font-semibold tracking-tight">{p.title}</h3>
++            <p className="mt-2 leading-relaxed text-ink-2">{p.text}</p>
++            {p.visual}
++          </Reveal>
++        ))}
++      </ul>
++    </section>
++  );
++}
+diff --git a/src/components/landing/bento.tsx b/src/components/landing/bento.tsx
+new file mode 100644
+index 0000000..9e4b15a
+--- /dev/null
++++ b/src/components/landing/bento.tsx
+@@ -0,0 +1,104 @@
++import { CalendarClock, CreditCard, Layers, Receipt, Repeat, Smartphone, Tags, Wallet } from "lucide-react";
++import { cn } from "@/lib/cn";
++import { areaFrom, scale, stepPath } from "./mini-chart";
++import { Reveal } from "./reveal";
++import { SectionHeading } from "./section";
++
++/**
++ * Só aparece aqui o que o NEXO já faz: contas, transferências, cartões, faturas, parcelamentos,
++ * assinaturas, renda fixa, categorias, projeção do saldo e uso no celular.
++ */
++function Card({ className, icon: Icon, title, text, children, delay }: { className?: string; icon: typeof Wallet; title: string; text: string; children?: React.ReactNode; delay?: number }) {
++  return (
++    <Reveal as="li" delay={delay} className={cn("panel group relative flex flex-col overflow-hidden rounded-[var(--radius-card)] p-6 transition-transform duration-300 hover:-translate-y-1", className)}>
++      <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent"><Icon className="size-[1.15rem]" aria-hidden /></span>
++      <h3 className="mt-4 text-lg font-semibold tracking-tight">{title}</h3>
++      <p className="mt-1.5 max-w-md text-[0.9375rem] leading-relaxed text-ink-2">{text}</p>
++      {children && <div aria-hidden className="mt-auto pt-6">{children}</div>}
++    </Reveal>
++  );
++}
++
++const PROJ = [2400, 2400, 1900, 1900, 6100, 6100, 5600, 5600, 4800, 4800, 4800, 3900, 3900, 6700, 6700, 6200, 5300, 5300, 4700, 4700];
++
++function ProjectionVisual() {
++  const W = 420;
++  const H = 190;
++  const { x, y } = scale(PROJ, W, H, 8);
++  const line = stepPath(PROJ, x, y);
++  return (
++    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="none">
++      <defs>
++        <linearGradient id="lp-bento-fill" x1="0" y1="0" x2="0" y2="1">
++          <stop offset="0" stopColor="var(--accent)" stopOpacity="0.3" />
++          <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
++        </linearGradient>
++      </defs>
++      <path d={areaFrom(line, x(PROJ.length - 1), H)} fill="url(#lp-bento-fill)" />
++      <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.25" strokeLinejoin="round" />
++      <path d={`M ${x(13)} ${y(PROJ[13])} H ${x(19)}`} stroke="var(--chart-expected)" strokeWidth="2.25" strokeDasharray="5 4" fill="none" />
++    </svg>
++  );
++}
++
++export function Bento() {
++  return (
++    <section id="funcionalidades" aria-labelledby="titulo-funcionalidades" className="scroll-mt-20 mx-auto max-w-6xl px-5 pb-20 sm:px-8 lg:pb-28">
++      <SectionHeading id="titulo-funcionalidades" eyebrow="Funcionalidades" title="Tudo o que você precisa para organizar suas finanças." />
++      <ul className="mt-14 grid auto-rows-auto gap-4 md:grid-cols-6 lg:gap-5">
++        <Card className="md:col-span-6 lg:col-span-4 lg:row-span-2" icon={CalendarClock} title="Projeção do saldo, dia a dia" text="Veja o menor saldo previsto e quanto está livre para gastar antes de gastar. Recebimentos previstos aparecem separados dos confirmados.">
++          <ProjectionVisual />
++          <p className="mt-2 text-xs text-ink-3">Exemplo com dados fictícios · linha tracejada: receita prevista</p>
++        </Card>
++
++        <Card className="md:col-span-3 lg:col-span-2" icon={Wallet} title="Múltiplas contas" text="Cadastre quantas contas quiser e transfira entre elas." delay={60}>
++          <ul className="grid gap-1.5 text-xs">
++            {[["Conta principal", "R$ 1.250,00"], ["Reserva", "R$ 550,00"]].map(([n, v]) => (
++              <li key={n} className="flex justify-between rounded-lg border border-border bg-field/50 px-3 py-2"><span className="text-ink-2">{n}</span><span className="font-medium">{v}</span></li>
++            ))}
++          </ul>
++        </Card>
++
++        <Card className="md:col-span-3 lg:col-span-2" icon={CreditCard} title="Cartões e faturas" text="Compras caem na fatura certa, conforme o fechamento do cartão." delay={120}>
++          <div className="rounded-xl bg-[linear-gradient(135deg,var(--accent),color-mix(in_oklab,var(--accent)_45%,#000))] p-3 text-[0.6875rem] text-accent-ink">
++            <p className="opacity-80">Fatura aberta</p>
++            <p className="mt-0.5 text-sm font-semibold">R$ 780,00</p>
++          </div>
++        </Card>
++
++        <Card className="md:col-span-2 lg:col-span-2" icon={Layers} title="Parcelamentos" text="Compras parceladas distribuídas pelas próximas faturas." delay={60}>
++          <div className="flex gap-1">
++            {Array.from({ length: 10 }, (_, i) => (
++              <span key={i} className="h-6 flex-1 rounded-md" style={{ background: i < 3 ? "var(--accent)" : "var(--surface-3)" }} />
++            ))}
++          </div>
++          <p className="mt-1.5 text-xs text-ink-3">3 de 10 pagas</p>
++        </Card>
++
++        <Card className="md:col-span-2 lg:col-span-2" icon={Repeat} title="Assinaturas e renda fixa" text="Streaming, apps, salário e mensalidades de clientes entram sozinhos nas datas certas." delay={120}>
++          <div className="flex flex-wrap gap-1.5 text-[0.6875rem]">
++            {["Streaming · mensal", "Salário · dia 5", "Cliente · dia 20"].map((t) => (
++              <span key={t} className="rounded-full border border-border bg-field/50 px-2.5 py-1 text-ink-2">{t}</span>
++            ))}
++          </div>
++        </Card>
++
++        <Card className="md:col-span-2 lg:col-span-2" icon={Tags} title="Categorias" text="Crie e organize categorias, com cores, para entender para onde o dinheiro vai." delay={180}>
++          <div className="flex h-3 overflow-hidden rounded-full">
++            {[["var(--accent)", 38], ["var(--chart-expense)", 26], ["var(--chart-expected)", 20], ["var(--chart-income)", 16]].map(([c, w]) => (
++              <span key={c as string} style={{ width: `${w}%`, background: c as string }} />
++            ))}
++          </div>
++        </Card>
++
++        <Card className="md:col-span-6 lg:col-span-6" icon={Smartphone} title="Do celular ao notebook" text="Navegação própria para telas pequenas e tema claro ou escuro, com várias paletas de cores para escolher." delay={60}>
++          <div className="flex items-end gap-3">
++            <span className="h-24 w-36 rounded-lg border border-border-strong bg-field/60 p-2"><span className="block h-2 w-2/3 rounded bg-surface-3" /><span className="mt-2 block h-10 rounded bg-accent-soft" /></span>
++            <span className="h-20 w-11 rounded-lg border border-border-strong bg-field/60 p-1.5"><span className="block h-1.5 w-2/3 rounded bg-surface-3" /><span className="mt-1.5 block h-8 rounded bg-accent-soft" /></span>
++            <Receipt className="mb-1 size-5 text-ink-3" aria-hidden />
++          </div>
++        </Card>
++      </ul>
++    </section>
++  );
++}
+diff --git a/src/components/landing/dashboard-preview.tsx b/src/components/landing/dashboard-preview.tsx
+new file mode 100644
+index 0000000..50b80cb
+--- /dev/null
++++ b/src/components/landing/dashboard-preview.tsx
+@@ -0,0 +1,102 @@
++import { ArrowDownLeft, ArrowUpRight, CreditCard } from "lucide-react";
++import { areaFrom, scale, stepPath } from "./mini-chart";
++
++/**
++ * Prévia do painel com dados 100% fictícios e estáticos: usa o mesmo visual do painel real
++ * (painéis, tokens e tipografia), mas não consulta nada nem importa os componentes do app.
++ */
++const BALANCE = [1800, 1800, 1480, 1480, 1480, 5680, 5680, 4230, 4230, 4140, 4140, 4140, 3360, 3360, 3360, 5160, 5160, 5160, 4920, 4920, 4490, 4490, 4490, 4490, 4340, 4340, 3830, 5630, 5630, 5630];
++
++export function DashboardPreview() {
++  const W = 520;
++  const H = 150;
++  const { x, y } = scale(BALANCE, W, H, 10);
++  const line = stepPath(BALANCE, x, y);
++  const lowestIdx = BALANCE.indexOf(Math.min(...BALANCE));
++  return (
++    <div
++      role="img"
++      aria-label="Prévia do painel do NEXO com dados fictícios: saldo livre para gastar, projeção do saldo no mês, entradas e saídas previstas e fatura do cartão."
++      className="panel relative isolate overflow-hidden rounded-[1.5rem] p-4 text-left sm:p-5"
++    >
++      <div aria-hidden className="pointer-events-none absolute -right-16 -top-28 -z-10 size-[22rem] rounded-full bg-[radial-gradient(closest-side,var(--glow-1),transparent)]" />
++      <div aria-hidden className="select-none">
++        <div className="flex items-center justify-between gap-3">
++          <p className="text-sm font-semibold tracking-tight">Visão geral</p>
++          <div className="flex gap-1 rounded-full border border-border bg-field/60 p-0.5 text-[0.6875rem] text-ink-3">
++            <span className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-ink">Até o fim do mês</span>
++            <span className="px-2 py-1">30 dias</span>
++            <span className="hidden px-2 py-1 sm:inline">90 dias</span>
++          </div>
++        </div>
++
++        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
++          <div className="rounded-2xl border border-border bg-surface/70 p-4">
++            <p className="flex items-center gap-2 text-xs text-ink-2">
++              <span className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />
++              Livre para gastar até 31/10
++            </p>
++            <p className="text-hero mt-1.5 text-[2.25rem] font-semibold leading-none tracking-[-0.05em] sm:text-[2.75rem]">R$ 3.830,00</p>
++            <div className="mt-3 flex gap-2 text-[0.6875rem]">
++              <div className="rounded-lg border border-border bg-field/50 px-2.5 py-1.5">
++                <p className="text-ink-3">Menor saldo · 27/10</p>
++                <p className="mt-0.5 font-semibold">R$ 3.830,00</p>
++              </div>
++              <div className="rounded-lg border border-border bg-field/50 px-2.5 py-1.5">
++                <p className="text-ink-3">Fim do período</p>
++                <p className="mt-0.5 font-semibold">R$ 5.630,00</p>
++              </div>
++            </div>
++            <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 h-auto w-full" preserveAspectRatio="none">
++              <defs>
++                <linearGradient id="lp-prev-fill" x1="0" y1="0" x2="0" y2="1">
++                  <stop offset="0" stopColor="var(--accent)" stopOpacity="0.32" />
++                  <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
++                </linearGradient>
++              </defs>
++              {[0.25, 0.5, 0.75].map((t) => (
++                <line key={t} x1="0" x2={W} y1={H * t} y2={H * t} stroke="var(--chart-grid)" strokeDasharray="3 5" />
++              ))}
++              <path d={areaFrom(line, x(BALANCE.length - 1), H)} fill="url(#lp-prev-fill)" />
++              <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.25" strokeLinejoin="round" />
++              <circle cx={x(5)} cy={y(BALANCE[5])} r="4" fill="var(--chart-expected)" stroke="var(--surface)" strokeWidth="2" />
++              <circle cx={x(lowestIdx)} cy={y(BALANCE[lowestIdx])} r="4.5" fill="var(--surface)" stroke="var(--warning)" strokeWidth="2.25" />
++            </svg>
++          </div>
++
++          <div className="grid gap-3">
++            <div className="rounded-2xl border border-border bg-surface/70 p-4">
++              <p className="text-xs text-ink-3">Saldo em conta hoje</p>
++              <p className="mt-1 text-2xl font-semibold tracking-tight">R$ 1.800,00</p>
++              <ul className="mt-3 grid gap-1.5 text-xs">
++                <li className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-ink-2"><span className="size-2 rounded-full bg-accent" />Conta principal</span><span className="whitespace-nowrap font-medium">R$ 1.250,00</span></li>
++                <li className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-ink-2"><span className="size-2 rounded-full bg-[var(--chart-expected)]" />Reserva</span><span className="whitespace-nowrap font-medium">R$ 550,00</span></li>
++              </ul>
++            </div>
++            <div className="grid gap-3">
++              <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-surface/70 px-3 py-2.5">
++                <span className="flex items-center gap-2 text-[0.6875rem] text-ink-3"><span className="grid size-7 place-items-center rounded-lg bg-positive-soft text-positive"><ArrowDownLeft className="size-3.5" /></span>A receber</span>
++                <span className="whitespace-nowrap text-sm font-semibold">R$ 3.600,00</span>
++              </div>
++              <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-surface/70 px-3 py-2.5">
++                <span className="flex items-center gap-2 text-[0.6875rem] text-ink-3"><span className="grid size-7 place-items-center rounded-lg bg-warning-soft text-warning"><ArrowUpRight className="size-3.5" /></span>A pagar</span>
++                <span className="whitespace-nowrap text-sm font-semibold">R$ 2.040,00</span>
++              </div>
++            </div>
++          </div>
++        </div>
++
++        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/70 px-4 py-3 text-xs">
++          <span className="flex items-center gap-2.5">
++            <span className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent"><CreditCard className="size-4" /></span>
++            <span>
++              <span className="block font-medium">Fatura do cartão</span>
++              <span className="block text-ink-3">vence em 12/10 · 3 compras parceladas</span>
++            </span>
++          </span>
++          <span className="font-semibold">R$ 780,00</span>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/landing/faq.tsx b/src/components/landing/faq.tsx
+new file mode 100644
+index 0000000..a5ee83e
+--- /dev/null
++++ b/src/components/landing/faq.tsx
+@@ -0,0 +1,57 @@
++"use client";
++import { ChevronDown } from "lucide-react";
++import * as React from "react";
++import { cn } from "@/lib/cn";
++import { Reveal } from "./reveal";
++import { SectionHeading } from "./section";
++
++/**
++ * Respostas baseadas no que o NEXO faz hoje (código e documentação do projeto).
++ * REVISAR: a resposta sobre preço depende de decisão do responsável pelo projeto.
++ */
++export const FAQ_ITEMS = [
++  { q: "O que é o NEXO?", a: "É um site de gestão financeira pessoal. Ele reúne contas, cartões, faturas, parcelamentos, assinaturas e a projeção do seu saldo dia a dia, para você saber quanto pode gastar antes de gastar." },
++  { q: "Como o NEXO ajuda a organizar minhas finanças?", a: "Você registra entradas, saídas e transferências, organiza tudo em categorias e acompanha no painel o saldo de hoje, o que ainda vai entrar, o que ainda vai sair e quanto está livre para gastar até o fim do período." },
++  { q: "Posso gerenciar mais de uma conta?", a: "Sim. Você pode cadastrar várias contas e cartões, transferir dinheiro entre as contas e ver o saldo de cada uma e o total no mesmo lugar." },
++  { q: "Como funcionam as projeções?", a: "A projeção parte do saldo atual e soma, dia a dia, o que está previsto: recebimentos, faturas de cartão, assinaturas e rendas fixas. Ela mostra o menor saldo do período e o quanto está livre para gastar. Você escolhe se recebimentos ainda não confirmados entram na conta." },
++  { q: "O NEXO é gratuito?", a: "Ainda não há planos nem preços publicados. Esta resposta será atualizada assim que essa definição for feita." },
++  { q: "Meus dados financeiros estão protegidos?", a: "Cada pessoa só acessa os próprios dados: o banco de dados isola as informações por conta em todas as tabelas e não há acesso público a elas. Você pode exportar tudo em um arquivo e excluir sua conta e seus dados quando quiser. A autenticação usa o Supabase." },
++  { q: "O NEXO conecta automaticamente aos bancos?", a: "Não. Hoje os lançamentos são registrados por você; não existe integração automática com bancos." },
++  { q: "Posso utilizar pelo celular?", a: "Sim. O NEXO funciona no navegador do celular, com navegação própria para telas pequenas, e também no tablet e no computador." },
++] as const;
++
++export function Faq() {
++  const [open, setOpen] = React.useState<number | null>(0);
++  return (
++    <section id="faq" aria-labelledby="titulo-faq" className="scroll-mt-20 mx-auto max-w-3xl px-5 py-20 sm:px-8 lg:py-28">
++      <SectionHeading id="titulo-faq" eyebrow="FAQ" title="Perguntas frequentes" />
++      <Reveal className="mt-12 grid gap-3">
++        {FAQ_ITEMS.map((item, i) => {
++          const isOpen = open === i;
++          return (
++            <div key={item.q} className={cn("panel-quiet rounded-2xl transition-colors", isOpen && "border-border-strong")}>
++              <h3>
++                <button
++                  type="button"
++                  id={`faq-b-${i}`}
++                  aria-expanded={isOpen}
++                  aria-controls={`faq-p-${i}`}
++                  onClick={() => setOpen(isOpen ? null : i)}
++                  className="flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl px-5 py-3 text-left text-[1.0625rem] font-medium"
++                >
++                  {item.q}
++                  <ChevronDown aria-hidden className={cn("size-5 shrink-0 text-ink-3 transition-transform duration-300", isOpen && "rotate-180 text-accent")} />
++                </button>
++              </h3>
++              <div id={`faq-p-${i}`} role="region" aria-labelledby={`faq-b-${i}`} className={cn("grid transition-[grid-template-rows] duration-300", isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
++                <div className="min-h-0 overflow-hidden" inert={!isOpen}>
++                  <p className="px-5 pb-5 leading-relaxed text-ink-2">{item.a}</p>
++                </div>
++              </div>
++            </div>
++          );
++        })}
++      </Reveal>
++    </section>
++  );
++}
+diff --git a/src/components/landing/final-cta.tsx b/src/components/landing/final-cta.tsx
+new file mode 100644
+index 0000000..4bac34d
+--- /dev/null
++++ b/src/components/landing/final-cta.tsx
+@@ -0,0 +1,28 @@
++import Link from "next/link";
++import { ArrowRight } from "lucide-react";
++import { Logo } from "@/components/brand/logo";
++import { Button } from "@/components/ui/button";
++import { Reveal } from "./reveal";
++
++export function FinalCta() {
++  return (
++    <section aria-labelledby="titulo-cta" className="mx-auto max-w-6xl px-5 pb-20 sm:px-8 lg:pb-28">
++      <Reveal className="panel relative isolate overflow-hidden rounded-[2rem] px-6 py-16 text-center sm:px-12 sm:py-20">
++        <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(40rem_22rem_at_50%_0%,var(--glow-1),transparent_70%),radial-gradient(34rem_20rem_at_100%_100%,var(--glow-2),transparent_70%)]" />
++        <div className="flex justify-center"><Logo markSize={52} /></div>
++        <h2 id="titulo-cta" className="mx-auto mt-8 max-w-3xl text-[clamp(2rem,6vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.045em]">
++          Seu dinheiro merece uma <span className="text-hero">visão melhor.</span>
++        </h2>
++        <p className="mx-auto mt-5 max-w-xl text-[1.0625rem] leading-relaxed text-ink-2">Comece a organizar suas finanças com mais clareza, controle e planejamento.</p>
++        <div className="mt-9 flex justify-center">
++          <Button asChild variant="accent" size="lg" className="group h-13 px-7 text-base">
++            <Link href="/cadastro">
++              Criar minha conta
++              <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
++            </Link>
++          </Button>
++        </div>
++      </Reveal>
++    </section>
++  );
++}
+diff --git a/src/components/landing/footer.tsx b/src/components/landing/footer.tsx
+new file mode 100644
+index 0000000..a5216a0
+--- /dev/null
++++ b/src/components/landing/footer.tsx
+@@ -0,0 +1,29 @@
++import Link from "next/link";
++import { Logo } from "@/components/brand/logo";
++
++/** Sem links para política de privacidade ou termos: esses documentos ainda não existem (pendência registrada). */
++export function LandingFooter() {
++  const year = new Date().getFullYear();
++  return (
++    <footer className="border-t border-border">
++      <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-8 md:grid-cols-[1.4fr_1fr_1fr]">
++        <div>
++          <Logo markSize={30} />
++          <p className="mt-4 text-sm text-ink-2">Seu dinheiro. Tudo conectado.</p>
++        </div>
++        <nav aria-label="Rodapé: página" className="grid content-start gap-2 text-sm">
++          <p className="font-semibold">Explorar</p>
++          <a href="#funcionalidades" className="text-ink-2 hover:text-ink">Funcionalidades</a>
++          <a href="#demonstracao" className="text-ink-2 hover:text-ink">Demonstração</a>
++          <a href="#faq" className="text-ink-2 hover:text-ink">FAQ</a>
++        </nav>
++        <nav aria-label="Rodapé: conta" className="grid content-start gap-2 text-sm">
++          <p className="font-semibold">Sua conta</p>
++          <Link href="/entrar" className="text-ink-2 hover:text-ink">Entrar</Link>
++          <Link href="/cadastro" className="text-ink-2 hover:text-ink">Criar conta</Link>
++        </nav>
++      </div>
++      <p className="mx-auto max-w-6xl px-5 pb-10 text-xs text-ink-3 sm:px-8">© {year} NEXO. Todos os direitos reservados.</p>
++    </footer>
++  );
++}
+diff --git a/src/components/landing/header.tsx b/src/components/landing/header.tsx
+new file mode 100644
+index 0000000..6f1b095
+--- /dev/null
++++ b/src/components/landing/header.tsx
+@@ -0,0 +1,94 @@
++"use client";
++import Link from "next/link";
++import { Menu, X } from "lucide-react";
++import * as React from "react";
++import { CoinToggle } from "@/components/brand/coin-toggle";
++import { Logo } from "@/components/brand/logo";
++import { Button } from "@/components/ui/button";
++import { cn } from "@/lib/cn";
++
++export const NAV_LINKS = [
++  { href: "#funcionalidades", label: "Funcionalidades" },
++  { href: "#demonstracao", label: "Demonstração" },
++  { href: "#faq", label: "FAQ" },
++] as const;
++
++export function LandingHeader() {
++  const [open, setOpen] = React.useState(false);
++  const [scrolled, setScrolled] = React.useState(false);
++  const toggleRef = React.useRef<HTMLButtonElement>(null);
++
++  React.useEffect(() => {
++    const onScroll = () => setScrolled(window.scrollY > 8);
++    onScroll();
++    window.addEventListener("scroll", onScroll, { passive: true });
++    return () => window.removeEventListener("scroll", onScroll);
++  }, []);
++
++  React.useEffect(() => {
++    if (!open) return;
++    const onKey = (e: KeyboardEvent) => {
++      if (e.key === "Escape") {
++        setOpen(false);
++        toggleRef.current?.focus();
++      }
++    };
++    document.addEventListener("keydown", onKey);
++    return () => document.removeEventListener("keydown", onKey);
++  }, [open]);
++
++  return (
++    <header className={cn("sticky top-0 z-40 transition-[background-color,border-color,box-shadow] duration-300", scrolled || open ? "border-b border-border bg-bg/85 backdrop-blur-md" : "border-b border-transparent")}>
++      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
++        <Link href="/" aria-label="NEXO, página inicial" className="rounded-lg">
++          <Logo markSize={32} />
++        </Link>
++
++        <nav aria-label="Seções da página" className="hidden items-center gap-1 md:flex">
++          {NAV_LINKS.map((l) => (
++            <a key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-[0.9375rem] text-ink-2 transition-colors hover:text-ink">
++              {l.label}
++            </a>
++          ))}
++        </nav>
++
++        <div className="flex items-center gap-2">
++          <CoinToggle className="size-9" />
++          <Button asChild variant="ghost" className="hidden h-10 px-3 md:inline-flex">
++            <Link href="/entrar">Entrar</Link>
++          </Button>
++          <Button asChild variant="accent" className="hidden h-10 px-4 text-sm md:inline-flex">
++            <Link href="/cadastro">Criar conta</Link>
++          </Button>
++          <button
++            ref={toggleRef}
++            type="button"
++            aria-expanded={open}
++            aria-controls="menu-mobile"
++            aria-label={open ? "Fechar menu" : "Abrir menu"}
++            onClick={() => setOpen((v) => !v)}
++            className="grid size-11 place-items-center rounded-full border border-border-strong bg-field/60 md:hidden"
++          >
++            {open ? <X className="size-5" /> : <Menu className="size-5" />}
++          </button>
++        </div>
++      </div>
++
++      <div id="menu-mobile" className={cn("grid overflow-hidden transition-[grid-template-rows] duration-300 md:hidden", open ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
++        <div className="min-h-0" inert={!open}>
++          <nav aria-label="Menu" className="mx-auto grid max-w-6xl gap-1 px-5 pb-5 pt-1 sm:px-8">
++            {NAV_LINKS.map((l) => (
++              <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="flex min-h-12 items-center rounded-xl px-3 text-base font-medium text-ink hover:bg-surface-2">
++                {l.label}
++              </a>
++            ))}
++            <div className="mt-2 grid grid-cols-2 gap-3">
++              <Button asChild variant="outline" size="lg"><Link href="/entrar">Entrar</Link></Button>
++              <Button asChild variant="accent" size="lg"><Link href="/cadastro">Criar conta</Link></Button>
++            </div>
++          </nav>
++        </div>
++      </div>
++    </header>
++  );
++}
+diff --git a/src/components/landing/hero.tsx b/src/components/landing/hero.tsx
+new file mode 100644
+index 0000000..0516553
+--- /dev/null
++++ b/src/components/landing/hero.tsx
+@@ -0,0 +1,51 @@
++import Link from "next/link";
++import { ArrowRight, ShieldCheck } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { DashboardPreview } from "./dashboard-preview";
++import { TiltFrame } from "./tilt-frame";
++
++export function Hero() {
++  return (
++    <section aria-labelledby="titulo-hero" className="relative isolate overflow-hidden">
++      <div aria-hidden className="absolute inset-x-0 top-0 -z-10 h-[46rem] bg-[radial-gradient(60rem_30rem_at_50%_-8%,var(--glow-1),transparent_70%)]" />
++      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:gap-10 lg:pb-28 lg:pt-16">
++        <div className="rise">
++          <p className="inline-flex items-center gap-2 rounded-full border border-border-strong bg-field/60 px-3.5 py-1.5 text-[0.8125rem] font-medium text-ink-2">
++            <span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />
++            Gestão financeira pessoal
++          </p>
++          <h1 id="titulo-hero" className="mt-6 text-balance text-[clamp(2.5rem,7.4vw,4.1rem)] font-semibold leading-[1] tracking-[-0.05em]">
++            Seu dinheiro.
++            <span className="text-hero block whitespace-nowrap pb-1">Tudo conectado.</span>
++          </h1>
++          <p className="mt-6 max-w-xl text-[1.0625rem] leading-relaxed text-ink-2 sm:text-lg">
++            Contas, cartões, despesas e seu futuro financeiro em um só lugar. Mais clareza para decidir. Mais controle para viver.
++          </p>
++          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
++            <Button asChild variant="accent" size="lg" className="group h-13 px-6 text-base">
++              <Link href="/cadastro">
++                Começar agora
++                <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
++              </Link>
++            </Button>
++            <Button asChild variant="outline" size="lg" className="h-13 px-6 text-base">
++              <a href="#demonstracao">Explorar o NEXO</a>
++            </Button>
++          </div>
++          <p className="mt-6 flex items-center gap-2 text-sm text-ink-3">
++            <ShieldCheck className="size-4 shrink-0 text-positive" aria-hidden />
++            Cada pessoa só enxerga os próprios dados.
++          </p>
++        </div>
++
++        <TiltFrame className="relative">
++          <DashboardPreview />
++          <div aria-hidden className="panel-quiet absolute -bottom-12 left-6 hidden rounded-2xl px-4 py-3 text-xs shadow-[var(--shadow)] sm:block lg:-left-8">
++            <p className="text-ink-3">Receita prevista · dia 5</p>
++            <p className="mt-0.5 text-base font-semibold text-positive">+ R$ 4.200,00</p>
++          </div>
++        </TiltFrame>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/landing/mini-chart.tsx b/src/components/landing/mini-chart.tsx
+new file mode 100644
+index 0000000..7a772e4
+--- /dev/null
++++ b/src/components/landing/mini-chart.tsx
+@@ -0,0 +1,32 @@
++/** Peças de gráfico em SVG puro (sem biblioteca), usadas só na página inicial com dados fictícios. */
++
++export function scale(values: number[], w: number, h: number, pad = 6, domain?: [number, number]) {
++  const min = domain ? domain[0] : Math.min(...values);
++  const max = domain ? domain[1] : Math.max(...values);
++  const span = max - min || 1;
++  const x = (i: number) => (values.length === 1 ? w / 2 : (i / (values.length - 1)) * w);
++  const y = (v: number) => pad + (1 - (v - min) / span) * (h - pad * 2);
++  return { x, y, min, max };
++}
++
++/** Linha em degraus (o saldo muda no dia do evento e fica constante até o próximo). */
++export function stepPath(values: number[], x: (i: number) => number, y: (v: number) => number) {
++  let d = `M ${x(0).toFixed(1)} ${y(values[0]).toFixed(1)}`;
++  for (let i = 1; i < values.length; i++) {
++    d += ` H ${x(i).toFixed(1)} V ${y(values[i]).toFixed(1)}`;
++  }
++  return d;
++}
++
++export function smoothPath(values: number[], x: (i: number) => number, y: (v: number) => number) {
++  let d = `M ${x(0).toFixed(1)} ${y(values[0]).toFixed(1)}`;
++  for (let i = 1; i < values.length; i++) {
++    const cx = (x(i - 1) + x(i)) / 2;
++    d += ` C ${cx.toFixed(1)} ${y(values[i - 1]).toFixed(1)} ${cx.toFixed(1)} ${y(values[i]).toFixed(1)} ${x(i).toFixed(1)} ${y(values[i]).toFixed(1)}`;
++  }
++  return d;
++}
++
++export function areaFrom(line: string, lastX: number, baseY: number, firstX = 0) {
++  return `${line} L ${lastX.toFixed(1)} ${baseY} L ${firstX} ${baseY} Z`;
++}
+diff --git a/src/components/landing/product-demo.tsx b/src/components/landing/product-demo.tsx
+new file mode 100644
+index 0000000..dccc84d
+--- /dev/null
++++ b/src/components/landing/product-demo.tsx
+@@ -0,0 +1,226 @@
++"use client";
++import * as React from "react";
++import { formatBRL, type Cents } from "@/domain/money";
++import { cn } from "@/lib/cn";
++import { areaFrom, scale, stepPath } from "./mini-chart";
++import { Reveal } from "./reveal";
++import { SectionHeading } from "./section";
++
++/**
++ * Visão limitada do painel com dados fictícios e fixos. Tudo é leitura: nada aqui salva ou consulta dados.
++ */
++interface Ev { day: number; amount: number; name: string; expected?: boolean; category?: string }
++const START = 1800;
++const DAYS = 30;
++const EVENTS: Ev[] = [
++  { day: 2, amount: -320, name: "Mercado", category: "Mercado" },
++  { day: 5, amount: 4200, name: "Salário" },
++  { day: 6, amount: -1450, name: "Aluguel", category: "Moradia" },
++  { day: 9, amount: -89, name: "Assinaturas", category: "Lazer" },
++  { day: 12, amount: -780, name: "Fatura do cartão", category: "Cartão" },
++  { day: 15, amount: 1800, name: "Cliente (previsto)", expected: true },
++  { day: 18, amount: -240, name: "Transporte", category: "Transporte" },
++  { day: 21, amount: -430, name: "Mercado", category: "Mercado" },
++  { day: 25, amount: -150, name: "Saúde", category: "Saúde" },
++  { day: 27, amount: -510, name: "Contas da casa", category: "Moradia" },
++  { day: 28, amount: 1800, name: "Cliente (previsto)", expected: true },
++];
++
++function balances(withExpected: boolean) {
++  const out: number[] = [];
++  let b = START;
++  for (let d = 0; d <= DAYS; d++) {
++    for (const e of EVENTS) if (e.day === d && (withExpected || !e.expected)) b += e.amount;
++    out.push(b);
++  }
++  return out;
++}
++
++const TABS = [
++  { id: "saldo", label: "Saldo" },
++  { id: "fluxo", label: "Entradas e saídas" },
++  { id: "categorias", label: "Categorias" },
++] as const;
++type Tab = (typeof TABS)[number]["id"];
++const brl = (n: number) => formatBRL(Math.round(n * 100) as Cents);
++
++function SaldoChart({ expected }: { expected: boolean }) {
++  const W = 640;
++  const H = 220;
++  const data = React.useMemo(() => balances(expected), [expected]);
++  const lo = Math.min(...data, 0);
++  const hi = Math.max(...data);
++  const { x, y } = scale(data, W, H, 16, [lo, hi]);
++  const line = stepPath(data, x, y);
++  const [hover, setHover] = React.useState<number | null>(null);
++  const lowest = data.indexOf(Math.min(...data));
++  const dayEvents = hover === null ? [] : EVENTS.filter((e) => e.day === hover && (expected || !e.expected));
++
++  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
++    const r = e.currentTarget.getBoundingClientRect();
++    setHover(Math.max(0, Math.min(DAYS, Math.round(((e.clientX - r.left) / r.width) * DAYS))));
++  };
++
++  return (
++    <div className="relative">
++      <svg
++        viewBox={`0 0 ${W} ${H}`}
++        className="h-auto w-full touch-pan-y overflow-visible"
++        role="img"
++        aria-label={`Projeção fictícia do saldo em 30 dias, de ${brl(data[0])} a ${brl(data[DAYS])}. Menor saldo: ${brl(data[lowest])} no dia ${lowest}.`}
++        onPointerMove={onMove}
++        onPointerLeave={() => setHover(null)}
++      >
++        <defs>
++          <linearGradient id="lp-demo-fill" x1="0" y1="0" x2="0" y2="1">
++            <stop offset="0" stopColor="var(--accent)" stopOpacity="0.3" />
++            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
++          </linearGradient>
++        </defs>
++        {[0.2, 0.4, 0.6, 0.8].map((t) => <line key={t} x1="0" x2={W} y1={H * t} y2={H * t} stroke="var(--chart-grid)" strokeDasharray="3 5" />)}
++        <path d={areaFrom(line, W, H)} fill="url(#lp-demo-fill)" />
++        <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" />
++        {EVENTS.filter((e) => e.amount > 0 && (expected || !e.expected)).map((e) => (
++          <circle key={`${e.day}-${e.name}`} cx={x(e.day)} cy={y(data[e.day])} r="5" fill={e.expected ? "var(--chart-expected)" : "var(--chart-income)"} stroke="var(--surface)" strokeWidth="2.5" />
++        ))}
++        <circle cx={x(lowest)} cy={y(data[lowest])} r="5.5" fill="var(--surface)" stroke="var(--warning)" strokeWidth="2.5" />
++        {hover !== null && (
++          <g>
++            <line x1={x(hover)} x2={x(hover)} y1="0" y2={H} stroke="var(--border-strong)" />
++            <circle cx={x(hover)} cy={y(data[hover])} r="5" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2.5" />
++          </g>
++        )}
++      </svg>
++      <div className="mt-3 flex min-h-[3.5rem] flex-wrap items-center gap-x-6 gap-y-1 text-sm" aria-live="off">
++        {hover === null ? (
++          <p className="text-ink-3">Passe o mouse (ou o dedo) sobre o gráfico para ver cada dia.</p>
++        ) : (
++          <>
++            <p><span className="text-ink-3">Dia {hover}:</span> <strong className="tabular-nums">{brl(data[hover])}</strong></p>
++            {dayEvents.map((e) => (
++              <p key={e.name + e.day} className="text-ink-2">{e.amount > 0 ? "+" : "−"} {brl(Math.abs(e.amount))} · {e.name}</p>
++            ))}
++          </>
++        )}
++      </div>
++    </div>
++  );
++}
++
++function FluxoChart() {
++  const W = 640;
++  const H = 240;
++  const weeks = [0, 1, 2, 3, 4].map((w) => {
++    const inW = EVENTS.filter((e) => e.amount > 0 && Math.ceil(e.day / 7) - 1 === w).reduce((s, e) => s + e.amount, 0);
++    const outW = EVENTS.filter((e) => e.amount < 0 && Math.ceil(e.day / 7) - 1 === w).reduce((s, e) => s - e.amount, 0);
++    return { w, inW, outW };
++  });
++  const max = Math.max(...weeks.flatMap((x) => [x.inW, x.outW]));
++  const bw = 44;
++  const gap = (W - weeks.length * bw * 2) / (weeks.length + 1);
++  return (
++    <svg viewBox={`0 0 ${W} ${H + 24}`} className="h-auto w-full" role="img" aria-label="Entradas e saídas fictícias por semana do mês">
++      {[0.25, 0.5, 0.75, 1].map((t) => <line key={t} x1="0" x2={W} y1={H * t} y2={H * t} stroke="var(--chart-grid)" strokeDasharray="3 5" />)}
++      {weeks.map(({ w, inW, outW }, i) => {
++        const x0 = gap + i * (bw * 2 + gap);
++        const hIn = (inW / max) * (H - 20);
++        const hOut = (outW / max) * (H - 20);
++        return (
++          <g key={w}>
++            <rect x={x0} y={H - hIn} width={bw} height={hIn} rx="6" fill="var(--chart-income)" />
++            <rect x={x0 + bw + 4} y={H - hOut} width={bw - 4} height={hOut} rx="6" fill="var(--chart-expense)" />
++            <text x={x0 + bw} y={H + 18} textAnchor="middle" fontSize="12" fill="var(--ink-3)">Semana {w + 1}</text>
++          </g>
++        );
++      })}
++    </svg>
++  );
++}
++
++function CategoriasChart() {
++  const totals = new Map<string, number>();
++  for (const e of EVENTS) if (e.amount < 0 && e.category) totals.set(e.category, (totals.get(e.category) ?? 0) - e.amount);
++  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
++  const sum = rows.reduce((s, [, v]) => s + v, 0);
++  const colors = ["var(--accent)", "var(--chart-expense)", "var(--chart-expected)", "var(--chart-income)", "var(--warning)", "var(--ink-3)"];
++  return (
++    <ul className="grid gap-3.5" aria-label="Despesas fictícias por categoria">
++      {rows.map(([name, v], i) => (
++        <li key={name}>
++          <div className="mb-1.5 flex items-center justify-between text-sm">
++            <span className="flex items-center gap-2"><span aria-hidden className="size-2.5 rounded-full" style={{ background: colors[i % colors.length] }} />{name}</span>
++            <span className="tabular-nums text-ink-2">{brl(v)} · {Math.round((v / sum) * 100)}%</span>
++          </div>
++          <div className="h-2.5 rounded-full bg-surface-3"><div className="h-2.5 rounded-full transition-[width] duration-500" style={{ width: `${(v / rows[0][1]) * 100}%`, background: colors[i % colors.length] }} /></div>
++        </li>
++      ))}
++    </ul>
++  );
++}
++
++export function ProductDemo() {
++  const [tab, setTab] = React.useState<Tab>("saldo");
++  const [expected, setExpected] = React.useState(true);
++  const lowestWith = Math.min(...balances(true));
++  const lowestWithout = Math.min(...balances(false));
++  return (
++    <div className="mx-auto mt-24 max-w-5xl">
++      <SectionHeading id="titulo-painel" eyebrow="O painel por dentro" title="Do saldo de hoje ao fim do mês." subtitle="Uma amostra do painel com dados fictícios. É só para olhar: nada aqui salva informações." />
++      <Reveal className="panel mt-10 overflow-hidden rounded-[1.75rem] p-5 sm:p-8">
++        <div className="flex flex-wrap items-center justify-between gap-4">
++          <div role="tablist" aria-label="Visualizações do painel" className="inline-flex max-w-full rounded-full border border-border bg-field/60 p-1">
++            {TABS.map((t) => (
++              <button
++                key={t.id}
++                id={`tab-${t.id}`}
++                role="tab"
++                type="button"
++                aria-selected={tab === t.id}
++                aria-controls="painel-demo"
++                tabIndex={tab === t.id ? 0 : -1}
++                onClick={() => setTab(t.id)}
++                onKeyDown={(e) => {
++                  const i = TABS.findIndex((x) => x.id === tab);
++                  if (e.key === "ArrowRight") setTab(TABS[(i + 1) % TABS.length].id);
++                  if (e.key === "ArrowLeft") setTab(TABS[(i + TABS.length - 1) % TABS.length].id);
++                }}
++                className={cn("min-h-10 whitespace-nowrap rounded-full px-3 text-sm font-medium transition-colors sm:px-4", tab === t.id ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink")}
++              >
++                {t.label}
++              </button>
++            ))}
++          </div>
++          {tab === "saldo" && (
++            <button
++              type="button"
++              role="switch"
++              aria-checked={expected}
++              onClick={() => setExpected((v) => !v)}
++              className="inline-flex min-h-10 items-center gap-2.5 rounded-full border border-border-strong bg-field/60 px-3.5 text-sm"
++            >
++              <span aria-hidden className={cn("relative inline-block h-5 w-9 shrink-0 rounded-full transition-colors", expected ? "bg-[var(--chart-expected)]" : "bg-surface-3")}>
++                <span className={cn("absolute left-0 top-0.5 size-4 rounded-full bg-white shadow transition-transform", expected ? "translate-x-[1.125rem]" : "translate-x-0.5")} />
++              </span>
++              Receitas previstas
++            </button>
++          )}
++        </div>
++
++        <div id="painel-demo" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-6">
++          {tab === "saldo" && (
++            <>
++              <SaldoChart expected={expected} />
++              <p className="mt-2 text-sm text-ink-2">
++                {expected
++                  ? `Contando os dois recebimentos previstos de clientes, o menor saldo do mês é ${brl(lowestWith)}.`
++                  : `Só com o que já foi confirmado, o menor saldo do mês é ${brl(lowestWithout)}. Ligue as receitas previstas para ver a diferença.`}
++              </p>
++            </>
++          )}
++          {tab === "fluxo" && <FluxoChart />}
++          {tab === "categorias" && <CategoriasChart />}
++        </div>
++      </Reveal>
++    </div>
++  );
++}
+diff --git a/src/components/landing/reveal.tsx b/src/components/landing/reveal.tsx
+new file mode 100644
+index 0000000..751e448
+--- /dev/null
++++ b/src/components/landing/reveal.tsx
+@@ -0,0 +1,38 @@
++"use client";
++import * as React from "react";
++import { cn } from "@/lib/cn";
++
++/**
++ * Entrada suave ao rolar. O conteúdo já nasce visível (sem JavaScript, ou com movimento
++ * reduzido, nada fica escondido): só quem está abaixo da dobra é "armado" depois de montar.
++ */
++export function Reveal({ children, className, delay = 0, as: Tag = "div" }: { children: React.ReactNode; className?: string; delay?: number; as?: "div" | "li" | "section" | "article" }) {
++  const ref = React.useRef<HTMLElement>(null);
++  const [state, setState] = React.useState<"idle" | "armed" | "in">("idle");
++
++  React.useEffect(() => {
++    const el = ref.current;
++    if (!el || typeof IntersectionObserver === "undefined") return;
++    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
++    if (el.getBoundingClientRect().top < window.innerHeight * 0.92) return;
++    setState("armed");
++    const io = new IntersectionObserver(
++      ([entry]) => {
++        if (entry.isIntersecting) {
++          setState("in");
++          io.disconnect();
++        }
++      },
++      { rootMargin: "0px 0px -8% 0px" },
++    );
++    io.observe(el);
++    return () => io.disconnect();
++  }, []);
++
++  const Comp = Tag as React.ElementType;
++  return (
++    <Comp ref={ref} data-reveal={state} style={delay ? { transitionDelay: `${delay}ms` } : undefined} className={cn("reveal", className)}>
++      {children}
++    </Comp>
++  );
++}
+diff --git a/src/components/landing/section.tsx b/src/components/landing/section.tsx
+new file mode 100644
+index 0000000..347d279
+--- /dev/null
++++ b/src/components/landing/section.tsx
+@@ -0,0 +1,12 @@
++import { cn } from "@/lib/cn";
++import { Reveal } from "./reveal";
++
++export function SectionHeading({ eyebrow, title, subtitle, id, className, align = "center" }: { eyebrow?: string; title: string; subtitle?: string; id: string; className?: string; align?: "center" | "left" }) {
++  return (
++    <Reveal className={cn("max-w-2xl", align === "center" && "mx-auto text-center", className)}>
++      {eyebrow && <p className="text-[0.8125rem] font-semibold uppercase tracking-[0.16em] text-accent">{eyebrow}</p>}
++      <h2 id={id} className="mt-3 text-balance text-[clamp(1.875rem,5vw,3rem)] font-semibold leading-[1.05] tracking-[-0.04em]">{title}</h2>
++      {subtitle && <p className="mt-4 text-[1.0625rem] leading-relaxed text-ink-2">{subtitle}</p>}
++    </Reveal>
++  );
++}
+diff --git a/src/components/landing/simulator.tsx b/src/components/landing/simulator.tsx
+new file mode 100644
+index 0000000..ac0e339
+--- /dev/null
++++ b/src/components/landing/simulator.tsx
+@@ -0,0 +1,180 @@
++"use client";
++import { Minus, TrendingDown, TrendingUp } from "lucide-react";
++import * as React from "react";
++import { formatBRL, type Cents } from "@/domain/money";
++import { cn } from "@/lib/cn";
++import { clampDay, clampMoney, describeResult, parseMoneyText, SIM_DAYS, SIM_DEFAULTS, SIM_LIMITS, simulate, type SimInput } from "@/lib/landing/simulation";
++import { areaFrom, scale, stepPath } from "./mini-chart";
++import { Reveal } from "./reveal";
++import { useAnimatedNumber } from "./use-animated-number";
++
++const reais = (n: number) => formatBRL((n * 100) as Cents);
++
++function MoneyControl({ id, label, value, onChange, max, tone }: { id: string; label: string; value: number; onChange: (v: number) => void; max: number; tone: string }) {
++  const [text, setText] = React.useState(() => String(value));
++  const focused = React.useRef(false);
++  React.useEffect(() => {
++    if (!focused.current) setText(String(value));
++  }, [value]);
++  return (
++    <div className="grid gap-2">
++      <div className="flex items-center justify-between gap-3">
++        <label htmlFor={`${id}-n`} className="flex items-center gap-2 text-sm font-medium text-ink-2">
++          <span aria-hidden className="size-2 rounded-full" style={{ background: tone }} />
++          {label}
++        </label>
++        <div className="flex h-10 w-36 items-center rounded-[var(--radius-control)] border border-border-strong bg-field px-3 focus-within:border-accent">
++          <span aria-hidden className="mr-1 text-sm text-ink-3">R$</span>
++          <input
++            id={`${id}-n`}
++            type="text"
++            inputMode="numeric"
++            autoComplete="off"
++            value={text}
++            onFocus={(e) => {
++              focused.current = true;
++              e.currentTarget.select();
++            }}
++            onBlur={() => {
++              focused.current = false;
++              setText(String(value));
++            }}
++            onChange={(e) => {
++              const v = parseMoneyText(e.target.value);
++              // mostra o valor já contido nos limites (ex.: 9999999 vira 1000000); vazio continua vazio
++              setText(/\d/.test(e.target.value) ? String(v) : "");
++              onChange(v);
++            }}
++            className="w-full bg-transparent text-right text-[0.9375rem] font-medium tabular-nums outline-none"
++          />
++        </div>
++      </div>
++      <input
++        id={`${id}-r`}
++        type="range"
++        min={SIM_LIMITS.min}
++        max={max}
++        step={100}
++        value={Math.min(value, max)}
++        onChange={(e) => onChange(clampMoney(e.target.value))}
++        aria-label={`${label}, deslize para ajustar`}
++        aria-valuetext={reais(value)}
++        className="sim-range"
++        style={{ ["--pct" as string]: `${(Math.min(value, max) / max) * 100}%`, ["--tone" as string]: tone }}
++      />
++    </div>
++  );
++}
++
++function DayControl({ id, label, value, onChange }: { id: string; label: string; value: number; onChange: (v: number) => void }) {
++  return (
++    <div className="grid gap-1.5">
++      <label htmlFor={id} className="flex items-center justify-between text-sm text-ink-2">
++        <span>{label}</span>
++        <span className="font-medium tabular-nums text-ink">dia {value}</span>
++      </label>
++      <input id={id} type="range" min={1} max={SIM_DAYS} step={1} value={value} onChange={(e) => onChange(clampDay(e.target.value))} aria-valuetext={`dia ${value} dos próximos 30`} className="sim-range" style={{ ["--pct" as string]: `${((value - 1) / (SIM_DAYS - 1)) * 100}%`, ["--tone" as string]: "var(--accent)" }} />
++    </div>
++  );
++}
++
++function Trajectory({ input, result }: { input: SimInput; result: ReturnType<typeof simulate> }) {
++  const W = 560;
++  const H = 240;
++  const values = result.series.map((p) => Number(p.balance) / 100);
++  const lo = Math.min(...values, 0);
++  const hi = Math.max(...values, 0);
++  const { x, y } = scale(values, W, H, 14, [lo, hi === lo ? hi + 1 : hi]);
++  const line = stepPath(values, x, y);
++  const zeroY = y(0);
++  const incomeDay = clampDay(input.incomeDay);
++  const expenseDay = clampDay(input.expenseDay);
++  const negative = lo < 0;
++  return (
++    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label={`Trajetória hipotética do saldo em 30 dias, de ${reais(result.series[0].balance / 100)} a ${reais(result.final / 100)}`}>
++      <defs>
++        <linearGradient id="lp-sim-fill" x1="0" y1="0" x2="0" y2="1">
++          <stop offset="0" stopColor="var(--accent)" stopOpacity="0.3" />
++          <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
++        </linearGradient>
++        <clipPath id="lp-sim-pos"><rect x="0" y="0" width={W} height={Math.max(0, zeroY)} /></clipPath>
++      </defs>
++      {[0.25, 0.5, 0.75].map((t) => (
++        <line key={t} x1="0" x2={W} y1={H * t} y2={H * t} stroke="var(--chart-grid)" strokeDasharray="3 5" />
++      ))}
++      {negative && <rect x="0" y={zeroY} width={W} height={Math.max(0, H - zeroY)} fill="var(--negative)" opacity="0.08" />}
++      <line x1="0" x2={W} y1={zeroY} y2={zeroY} stroke="var(--border-strong)" />
++      <g clipPath="url(#lp-sim-pos)"><path d={areaFrom(line, W, zeroY)} fill="url(#lp-sim-fill)" /></g>
++      <path d={line} fill="none" stroke={negative ? "var(--negative)" : "var(--accent)"} strokeWidth="2.5" strokeLinejoin="round" style={{ transition: "d 400ms" }} />
++      {[
++        { day: incomeDay, color: "var(--chart-income)", label: "Receita" },
++        { day: expenseDay, color: "var(--chart-expense)", label: "Despesa" },
++      ].map((e) => (
++        <g key={e.label}>
++          <circle cx={x(e.day)} cy={y(values[e.day])} r="5.5" fill={e.color} stroke="var(--surface)" strokeWidth="2.5" />
++        </g>
++      ))}
++      <text x="0" y={H - 1} fontSize="11" fill="var(--ink-3)">hoje</text>
++      <text x={W} y={H - 1} fontSize="11" fill="var(--ink-3)" textAnchor="end">dia 30</text>
++    </svg>
++  );
++}
++
++export function Simulator() {
++  const [input, setInput] = React.useState<SimInput>({ ...SIM_DEFAULTS });
++  const set = (patch: Partial<SimInput>) => setInput((s) => ({ ...s, ...patch }));
++  const result = React.useMemo(() => simulate(input), [input]);
++  const animatedFinal = useAnimatedNumber(result.final);
++  const message = describeResult(result);
++
++  const Icon = result.status === "up" ? TrendingUp : result.status === "down" ? TrendingDown : Minus;
++  const tone = result.status === "up" ? "text-positive" : result.status === "down" ? "text-negative" : "text-ink-2";
++  const label = result.status === "up" ? "Crescimento" : result.status === "down" ? "Redução" : "Sem alteração";
++
++  return (
++    <Reveal className="panel mx-auto mt-12 max-w-5xl overflow-hidden rounded-[1.75rem] p-5 sm:p-8">
++      <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10">
++        <form onSubmit={(e) => e.preventDefault()} className="grid content-start gap-6" aria-label="Simulador de saldo em 30 dias">
++          <MoneyControl id="sim-initial" label="Saldo inicial" value={input.initial} onChange={(v) => set({ initial: v })} max={50_000} tone="var(--accent)" />
++          <MoneyControl id="sim-income" label="Receitas previstas" value={input.income} onChange={(v) => set({ income: v })} max={20_000} tone="var(--chart-income)" />
++          <MoneyControl id="sim-expense" label="Despesas previstas" value={input.expense} onChange={(v) => set({ expense: v })} max={20_000} tone="var(--chart-expense)" />
++
++          <fieldset className="grid gap-4 rounded-2xl border border-border bg-field/40 p-4">
++            <legend className="px-1 text-sm font-medium text-ink-2">Quando acontecem (opcional)</legend>
++            <DayControl id="sim-income-day" label="Recebimento" value={input.incomeDay} onChange={(v) => set({ incomeDay: v })} />
++            <DayControl id="sim-expense-day" label="Pagamento" value={input.expenseDay} onChange={(v) => set({ expenseDay: v })} />
++            <p className="text-xs leading-relaxed text-ink-3">Hipótese: tudo cai de uma vez no dia escolhido. Mudar o dia não altera o saldo final, só o caminho até ele.</p>
++          </fieldset>
++        </form>
++
++        <div className="grid content-start gap-5">
++          <div>
++            <p className="text-sm text-ink-2">Saldo final estimado em 30 dias</p>
++            <p className={cn("mt-1 text-[clamp(2.25rem,7vw,3.5rem)] font-semibold leading-none tracking-[-0.05em] tabular-nums", result.final < 0 ? "text-negative" : "text-hero")}>
++              {formatBRL(animatedFinal as Cents)}
++            </p>
++            <p className={cn("mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-field/60 px-3 py-1.5 text-sm font-medium", tone)}>
++              <Icon className="size-4" aria-hidden />
++              {label}
++              {result.status !== "flat" && <span className="tabular-nums">{result.status === "up" ? "+" : "−"} {formatBRL(Math.abs(result.delta) as Cents)}</span>}
++            </p>
++          </div>
++
++          <Trajectory input={input} result={result} />
++
++          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-3" aria-label="Legenda">
++            <li className="flex items-center gap-1.5"><span aria-hidden className="size-2 rounded-full" style={{ background: "var(--chart-income)" }} />recebimento (dia {input.incomeDay})</li>
++            <li className="flex items-center gap-1.5"><span aria-hidden className="size-2 rounded-full" style={{ background: "var(--chart-expense)" }} />pagamento (dia {input.expenseDay})</li>
++          </ul>
++
++          <p role="status" aria-live="polite" className={cn("rounded-xl px-4 py-3 text-sm leading-relaxed", result.firstNegativeDay !== null ? "bg-accent-soft text-negative" : "bg-field/60 text-ink-2")}>
++            {message}
++          </p>
++        </div>
++      </div>
++      <p className="mt-6 border-t border-border pt-4 text-xs leading-relaxed text-ink-3">
++        Exemplo educativo e simplificado: saldo final = saldo inicial + receitas − despesas. Nada do que você digita aqui é enviado ou salvo, e não precisa de conta. No NEXO, a projeção usa as datas reais dos seus lançamentos, faturas e assinaturas.
++      </p>
++    </Reveal>
++  );
++}
+diff --git a/src/components/landing/tilt-frame.tsx b/src/components/landing/tilt-frame.tsx
+new file mode 100644
+index 0000000..4752d3d
+--- /dev/null
++++ b/src/components/landing/tilt-frame.tsx
+@@ -0,0 +1,32 @@
++"use client";
++import * as React from "react";
++
++/** Profundidade sutil: inclina o conteúdo alguns graus seguindo o ponteiro. Só transform; desligado com movimento reduzido ou toque. */
++export function TiltFrame({ children, className }: { children: React.ReactNode; className?: string }) {
++  const ref = React.useRef<HTMLDivElement>(null);
++  const enabled = React.useRef(false);
++
++  React.useEffect(() => {
++    enabled.current = window.matchMedia("(hover: hover) and (prefers-reduced-motion: no-preference)").matches;
++  }, []);
++
++  const move = (e: React.PointerEvent) => {
++    const el = ref.current;
++    if (!el || !enabled.current) return;
++    const r = el.getBoundingClientRect();
++    const px = (e.clientX - r.left) / r.width - 0.5;
++    const py = (e.clientY - r.top) / r.height - 0.5;
++    el.style.transform = `perspective(1400px) rotateY(${(px * 5).toFixed(2)}deg) rotateX(${(-py * 4).toFixed(2)}deg)`;
++  };
++  const leave = () => {
++    if (ref.current) ref.current.style.transform = "";
++  };
++
++  return (
++    <div onPointerMove={move} onPointerLeave={leave} className={className}>
++      <div ref={ref} className="transition-transform duration-300 ease-out will-change-transform">
++        {children}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/landing/use-animated-number.ts b/src/components/landing/use-animated-number.ts
+new file mode 100644
+index 0000000..9513f42
+--- /dev/null
++++ b/src/components/landing/use-animated-number.ts
+@@ -0,0 +1,32 @@
++"use client";
++import * as React from "react";
++
++/** Anima um número até o alvo (easing suave). Com movimento reduzido, vai direto. */
++export function useAnimatedNumber(target: number, duration = 520): number {
++  const [value, setValue] = React.useState(target);
++  const valueRef = React.useRef(target);
++
++  React.useEffect(() => {
++    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
++      valueRef.current = target;
++      setValue(target);
++      return;
++    }
++    const from = valueRef.current;
++    if (from === target) return;
++    const start = performance.now();
++    let raf = 0;
++    const tick = (now: number) => {
++      const t = Math.min(1, (now - start) / duration);
++      const eased = 1 - Math.pow(1 - t, 3);
++      const next = Math.round(from + (target - from) * eased);
++      valueRef.current = next;
++      setValue(next);
++      if (t < 1) raf = requestAnimationFrame(tick);
++    };
++    raf = requestAnimationFrame(tick);
++    return () => cancelAnimationFrame(raf);
++  }, [target, duration]);
++
++  return value;
++}
+diff --git a/src/lib/landing/__tests__/simulation.test.ts b/src/lib/landing/__tests__/simulation.test.ts
+new file mode 100644
+index 0000000..397319b
+--- /dev/null
++++ b/src/lib/landing/__tests__/simulation.test.ts
+@@ -0,0 +1,75 @@
++import { describe, expect, it } from "vitest";
++import { clampDay, clampMoney, describeResult, parseMoneyText, SIM_DAYS, SIM_DEFAULTS, simulate } from "../simulation";
++import { shouldShowLanding } from "../routing";
++
++describe("simulador da página inicial", () => {
++  it("valores iniciais: 5.000 + 3.500 − 2.200 = 6.300", () => {
++    const r = simulate(SIM_DEFAULTS);
++    expect(r.final).toBe(630000);
++    expect(r.delta).toBe(130000);
++    expect(r.status).toBe("up");
++    expect(r.series).toHaveLength(SIM_DAYS + 1);
++    expect(r.series[0].balance).toBe(500000);
++    expect(r.series[SIM_DAYS].balance).toBe(r.final);
++  });
++
++  it("saldo final não depende dos dias escolhidos", () => {
++    const a = simulate({ ...SIM_DEFAULTS, incomeDay: 1, expenseDay: 30 });
++    const b = simulate({ ...SIM_DEFAULTS, incomeDay: 30, expenseDay: 1 });
++    expect(a.final).toBe(b.final);
++  });
++
++  it("despesa maior que saldo + receita: negativo, com alerta e dia do primeiro negativo", () => {
++    const r = simulate({ initial: 1000, income: 0, expense: 3000, incomeDay: 5, expenseDay: 12 });
++    expect(r.final).toBe(-200000);
++    expect(r.status).toBe("down");
++    expect(r.firstNegativeDay).toBe(12);
++    expect(r.lowest).toEqual({ day: 12, balance: -200000 });
++    expect(describeResult(r)).toContain("fica negativo");
++  });
++
++  it("a ordem dos dias pode deixar o saldo negativo mesmo terminando positivo", () => {
++    const r = simulate({ initial: 500, income: 3000, expense: 2000, incomeDay: 20, expenseDay: 3 });
++    expect(r.final).toBeGreaterThan(0);
++    expect(r.firstNegativeDay).toBe(3);
++  });
++
++  it("tudo zerado: inalterado", () => {
++    const r = simulate({ initial: 0, income: 0, expense: 0, incomeDay: 1, expenseDay: 1 });
++    expect(r.status).toBe("flat");
++    expect(r.final).toBe(0);
++    expect(r.firstNegativeDay).toBeNull();
++    expect(describeResult(r)).toContain("fica igual");
++  });
++
++  it("receita igual à despesa: inalterado", () => {
++    expect(simulate({ initial: 100, income: 700, expense: 700, incomeDay: 2, expenseDay: 9 }).status).toBe("flat");
++  });
++
++  it("limites e entradas inválidas são contidos", () => {
++    expect(clampMoney(-50)).toBe(0);
++    expect(clampMoney(99_999_999)).toBe(1_000_000);
++    expect(clampMoney(Number.NaN)).toBe(0);
++    expect(clampMoney("abc")).toBe(0);
++    expect(clampMoney(12.6)).toBe(13);
++    expect(clampDay(0)).toBe(1);
++    expect(clampDay(99)).toBe(SIM_DAYS);
++    expect(parseMoneyText("R$ 1.500")).toBe(1500);
++    expect(parseMoneyText("")).toBe(0);
++    expect(parseMoneyText("9999999999")).toBe(1_000_000);
++    expect(simulate({ initial: -5, income: 1e12, expense: Number.NaN, incomeDay: -1, expenseDay: 500 }).final).toBe(100_000_000);
++  });
++
++  it("mensagem em reais", () => {
++    expect(describeResult(simulate(SIM_DEFAULTS))).toMatch(/sobe R\$\s?1\.300,00 e chega a R\$\s?6\.300,00/);
++  });
++});
++
++describe("rota da página inicial", () => {
++  it("só a raiz sem sessão mostra a landing", () => {
++    expect(shouldShowLanding("/", false)).toBe(true);
++    expect(shouldShowLanding("/", true)).toBe(false);
++    expect(shouldShowLanding("/contas", false)).toBe(false);
++    expect(shouldShowLanding("/entrar", false)).toBe(false);
++  });
++});
+diff --git a/src/lib/landing/routing.ts b/src/lib/landing/routing.ts
+new file mode 100644
+index 0000000..2a85a90
+--- /dev/null
++++ b/src/lib/landing/routing.ts
+@@ -0,0 +1,10 @@
++/** A página inicial pública vive em /bem-vindo, mas é servida em "/" para quem não tem sessão. */
++export const LANDING_PATH = "/bem-vindo";
++
++/**
++ * Visitante sem sessão na raiz vê a página inicial (reescrita interna, a URL continua "/").
++ * Quem tem sessão continua indo direto ao painel; nada de rota protegida muda.
++ */
++export function shouldShowLanding(pathname: string, isAuthenticated: boolean): boolean {
++  return pathname === "/" && !isAuthenticated;
++}
+diff --git a/src/lib/landing/simulation.ts b/src/lib/landing/simulation.ts
+new file mode 100644
+index 0000000..f0e439d
+--- /dev/null
++++ b/src/lib/landing/simulation.ts
+@@ -0,0 +1,97 @@
++import { formatBRL, type Cents } from "@/domain/money";
++
++/**
++ * Simulador da página inicial. Puro e sem efeitos: nada daqui toca em banco, rede ou sessão.
++ * Valores em reais inteiros (o que o visitante digita) e resultados em centavos.
++ */
++export const SIM_DAYS = 30;
++export const SIM_LIMITS = { min: 0, max: 1_000_000 } as const;
++export const SIM_DEFAULTS = { initial: 5000, income: 3500, expense: 2200, incomeDay: 5, expenseDay: 10 } as const;
++
++export interface SimInput {
++  initial: number;
++  income: number;
++  expense: number;
++  /** dia (1 a 30) em que o recebimento cai; só afeta a trajetória, não o saldo final */
++  incomeDay: number;
++  expenseDay: number;
++}
++
++export type SimStatus = "up" | "down" | "flat";
++
++export interface SimResult {
++  series: { day: number; balance: Cents }[];
++  initial: Cents;
++  final: Cents;
++  delta: Cents;
++  status: SimStatus;
++  lowest: { day: number; balance: Cents };
++  firstNegativeDay: number | null;
++}
++
++/** Aceita qualquer coisa (inclusive NaN/texto) e devolve um inteiro dentro dos limites. */
++export function clampMoney(value: unknown): number {
++  const n = typeof value === "number" ? value : Number(value);
++  if (!Number.isFinite(n)) return SIM_LIMITS.min;
++  return Math.min(SIM_LIMITS.max, Math.max(SIM_LIMITS.min, Math.round(n)));
++}
++
++export function clampDay(value: unknown): number {
++  const n = typeof value === "number" ? value : Number(value);
++  if (!Number.isFinite(n)) return 1;
++  return Math.min(SIM_DAYS, Math.max(1, Math.round(n)));
++}
++
++/** Converte o texto digitado ("1.500", "R$ 2000", "abc") em reais inteiros válidos. */
++export function parseMoneyText(text: string): number {
++  const digits = text.replace(/\D/g, "").slice(0, 7);
++  return digits === "" ? 0 : clampMoney(Number(digits));
++}
++
++export function simulate(raw: SimInput): SimResult {
++  const initial = clampMoney(raw.initial) * 100;
++  const income = clampMoney(raw.income) * 100;
++  const expense = clampMoney(raw.expense) * 100;
++  const incomeDay = clampDay(raw.incomeDay);
++  const expenseDay = clampDay(raw.expenseDay);
++
++  const series: SimResult["series"] = [];
++  let balance = initial;
++  let lowest = { day: 0, balance: initial as Cents };
++  let firstNegativeDay: number | null = initial < 0 ? 0 : null;
++  for (let day = 0; day <= SIM_DAYS; day++) {
++    if (day === incomeDay) balance += income;
++    if (day === expenseDay) balance -= expense;
++    series.push({ day, balance: balance as Cents });
++    if (balance < lowest.balance) lowest = { day, balance: balance as Cents };
++    if (balance < 0 && firstNegativeDay === null) firstNegativeDay = day;
++  }
++  // saldo final = saldo inicial + receitas − despesas (a ordem dos dias não muda a soma)
++  const final = initial + income - expense;
++  const delta = final - initial;
++  return {
++    series,
++    initial: initial as Cents,
++    final: final as Cents,
++    delta: delta as Cents,
++    status: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
++    lowest,
++    firstNegativeDay,
++  };
++}
++
++/** Mensagem para leitores de tela e para o resumo na tela. */
++export function describeResult(r: SimResult): string {
++  const final = formatBRL(r.final);
++  const delta = formatBRL(Math.abs(r.delta) as Cents);
++  const head =
++    r.status === "up"
++      ? `Em 30 dias seu saldo sobe ${delta} e chega a ${final}.`
++      : r.status === "down"
++        ? `Em 30 dias seu saldo cai ${delta} e chega a ${final}.`
++        : `Em 30 dias seu saldo fica igual, em ${final}.`;
++  if (r.firstNegativeDay !== null) {
++    return `${head} Atenção: no dia ${r.firstNegativeDay} o saldo fica negativo (${formatBRL(r.lowest.balance)} no ponto mais baixo).`;
++  }
++  return head;
++}
+diff --git a/src/lib/landing/site.ts b/src/lib/landing/site.ts
+new file mode 100644
+index 0000000..fdd7465
+--- /dev/null
++++ b/src/lib/landing/site.ts
+@@ -0,0 +1,5 @@
++/** Endereço público do site (usado em metadados, sitemap e robots). */
++export function siteUrl(): string {
++  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://nexo-gamma-one.vercel.app";
++  return raw.replace(/\/+$/, "");
++}
+diff --git a/src/middleware.ts b/src/middleware.ts
+index c133558..7b0b5ab 100644
+--- a/src/middleware.ts
++++ b/src/middleware.ts
+@@ -1,8 +1,9 @@
+ import { createServerClient } from "@supabase/ssr";
+ import { NextResponse, type NextRequest } from "next/server";
++import { LANDING_PATH, shouldShowLanding } from "@/lib/landing/routing";
+ import { SUPABASE_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/env";
+ 
+-const PUBLIC_PATHS = ["/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev", "/diagnostico"];
++const PUBLIC_PATHS = [LANDING_PATH, "/robots.txt", "/sitemap.xml", "/entrar", "/cadastro", "/recuperar-senha", "/auth", "/dev", "/diagnostico"];
+ 
+ export async function middleware(request: NextRequest) {
+   const url = SUPABASE_URL;
+@@ -12,6 +13,7 @@ export async function middleware(request: NextRequest) {
+ 
+   if (!isSupabaseConfigured()) {
+     // sem configuração: só as páginas públicas funcionam (exibem o aviso de configuração)
++    if (shouldShowLanding(pathname, false)) return NextResponse.rewrite(new URL(LANDING_PATH, request.url));
+     if (isPublic) return NextResponse.next();
+     return NextResponse.redirect(new URL("/entrar", request.url));
+   }
+@@ -33,6 +35,12 @@ export async function middleware(request: NextRequest) {
+   const { data } = await supabase.auth.getClaims();
+   const user = data?.claims?.sub ? { id: data.claims.sub } : null;
+ 
++  // visitante na raiz: página inicial pública (reescrita; a URL continua "/")
++  if (shouldShowLanding(pathname, !!user)) {
++    const landing = NextResponse.rewrite(new URL(LANDING_PATH, request.url));
++    for (const cookie of response.cookies.getAll()) landing.cookies.set(cookie);
++    return landing;
++  }
+   if (!user && !isPublic) {
+     const to = new URL("/entrar", request.url);
+     if (pathname !== "/") to.searchParams.set("next", pathname);
+-- 
+2.43.0
+
