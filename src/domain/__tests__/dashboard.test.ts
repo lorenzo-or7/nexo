@@ -33,4 +33,15 @@ describe("dashboard derivado dos dados", () => {
     expect(d.totals.openInvoices).toBe(81488); // Nubank fecha dia 13
     expect(d.series.at(-1)!.balance).toBeCloseTo(263.23);
   });
+
+  it("separa o gráfico com e sem receitas previstas", () => {
+    const d = buildDashboard(input());
+    const last = d.chart.days.at(-1)!;
+    // com previstas: termina no saldo projetado; só confirmado: sem os recebimentos previstos
+    expect(last.balanceAll).toBeCloseTo(263.23);
+    expect(last.balanceConfirmed).toBeCloseTo(263.23 - (812.68 + 488.99));
+    expect(d.chart.days.reduce((t, x) => t + x.incomeExpected, 0)).toBeCloseTo(812.68 + 488.99);
+    expect(d.chart.expectedIncome.map((e) => e.amount)).toEqual([81268, 48899]);
+    expect(d.chart.days.reduce((t, x) => t + x.incomeConfirmed, 0)).toBe(0);
+  });
 });

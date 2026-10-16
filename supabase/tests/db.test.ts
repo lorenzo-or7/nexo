@@ -554,3 +554,58 @@ describe("assinaturas: salvar, cobrar e excluir", () => {
     expect((await as(ALICE, () => one<{ r: string }>(`select remove_subscription($1, '2026-10-10') as r`, [vazia]))).r).toBe("deleted");
   });
 });
+
+describe("renda fixa", () => {
+  it("lança o mês uma única vez, acompanha edições e isola usuários", async () => {
+    const acc = await newAccount(ALICE, "Conta renda fixa");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'client', 'Mensalidade Namba', 'Namba', 150000, 5::smallint, '2026-10-05', null, $1, null, null) as id`,
+      [acc],
+    )).id);
+
+    const first = await as(ALICE, () => one<{ r: { created: boolean } }>(`select record_fixed_income_entry($1, '2026-10', '2026-10-05') as r`, [fid]));
+    const again = await as(ALICE, () => one<{ r: { created: boolean } }>(`select record_fixed_income_entry($1, '2026-10', '2026-10-05') as r`, [fid]));
+    expect(first.r.created).toBe(true);
+    expect(again.r.created).toBe(false);
+
+    // previsto não entra no saldo real
+    expect(await balance(ALICE, acc)).toBe(0);
+
+    // editar valor/dia atualiza o lançamento ainda previsto
+    await as(ALICE, () => q(`select save_fixed_income($1, 'client', 'Mensalidade Namba', 'Namba', 180000, 31::smallint, '2026-10-05', null, $2, null, null)`, [fid, acc]));
+    const e = await as(ALICE, () => one<{ amount_cents: string; occurred_on: string; status: string }>(
+      `select amount_cents, to_char(occurred_on, 'YYYY-MM-DD') as occurred_on, status from account_entries where fixed_income_id = $1`, [fid]));
+    expect(Number(e.amount_cents)).toBe(180000);
+    expect(e.occurred_on).toBe("2026-10-31");
+
+    // realizado entra no saldo e deixa de acompanhar edições
+    const entryId = (await as(ALICE, () => one<{ id: string }>(`select id from account_entries where fixed_income_id = $1`, [fid]))).id;
+    await as(ALICE, () => q(`select confirm_entry($1, '2026-10-06')`, [entryId]));
+    expect(await balance(ALICE, acc)).toBe(180000);
+    await as(ALICE, () => q(`select save_fixed_income($1, 'client', 'Mensalidade Namba', 'Namba', 200000, 5::smallint, '2026-10-05', null, $2, null, null)`, [fid, acc]));
+    expect(await balance(ALICE, acc)).toBe(180000);
+
+    // dia 31 em fevereiro cai no último dia do mês
+    const feb = await one<{ d: string }>(`select to_char(fixed_income_date('2027-02', 31), 'YYYY-MM-DD') as d`);
+    expect(feb.d).toBe("2027-02-28");
+
+    // outro usuário não enxerga nem lança
+    expect(await as(BOB, () => q(`select 1 from fixed_incomes`))).toHaveLength(0);
+    await expect(as(BOB, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-05')`, [fid]))).rejects.toThrow();
+
+    // com histórico, remover só encerra
+    const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
+    expect(res.r).toBe("ended");
+    // conta com renda fixa só arquiva
+    const rm = await as(ALICE, () => one<{ r: string }>(`select remove_account($1) as r`, [acc]));
+    expect(rm.r).toBe("archived");
+  });
+
+  it("sem histórico, remover apaga", async () => {
+    const acc = await newAccount(ALICE, "Conta sem lançamentos");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'salary', 'Salário', null, 500000, 5::smallint, '2026-11-05', null, $1, null, null) as id`, [acc])).id);
+    const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
+    expect(res.r).toBe("deleted");
+  });
+});

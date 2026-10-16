@@ -3,6 +3,7 @@
  * Função pura e serializável: tudo que aparece no dashboard é derivado daqui.
  */
 import { computeInvoices } from "./billing";
+import { categoryColor } from "./categories";
 import { addDays, monthOf, type LocalDate } from "./dates";
 import { accountBalance, incomeTotal, spendingLines, type AccountEntry } from "./ledger";
 import { sum, type Cents } from "./money";
@@ -31,6 +32,25 @@ export interface CategoryMeta {
   id: string;
   name: string;
   parentId: string | null;
+  color?: string | null;
+}
+
+export interface ChartDay {
+  date: LocalDate;
+  /** saldo projetado contando as receitas previstas */
+  balanceAll: number;
+  /** saldo projetado só com o que é certo (sem receitas previstas) */
+  balanceConfirmed: number;
+  incomeConfirmed: number;
+  incomeExpected: number;
+  expenses: number;
+}
+
+export interface ExpectedIncomeItem {
+  date: LocalDate;
+  label: string;
+  amount: Cents;
+  late: boolean;
 }
 
 export interface DashboardInput {
@@ -68,7 +88,9 @@ export interface DashboardModel {
   upcoming: { date: LocalDate; label: string; amount: Cents; status: TimelineStatus; originalDate?: LocalDate }[];
   series: { date: LocalDate; balance: number }[];
   recent: { id: string; date: LocalDate; label: string; amount: Cents; kind: string }[];
-  byCategory: { name: string; amount: Cents }[];
+  byCategory: { name: string; amount: Cents; color: string }[];
+  /** dados dos gráficos (valores em reais, só para desenhar) */
+  chart: { days: ChartDay[]; expectedIncome: ExpectedIncomeItem[]; defaultShowExpected: boolean };
 }
 
 export function horizonDate(today: LocalDate, h: DashboardInput["horizon"]): LocalDate {
@@ -81,6 +103,25 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   const today = base.today;
   const to = horizonDate(today, input.horizon);
   const timeline = buildTimeline({ ...base, to });
+  // duas projeções para o gráfico: com e sem as receitas previstas (o filtro da tela alterna entre elas)
+  const withExpected = buildTimeline({ ...base, to, includeExpectedIncome: true });
+  const confirmedOnly = buildTimeline({ ...base, to, includeExpectedIncome: false });
+  const chartDays: ChartDay[] = withExpected.days.map((d, i) => {
+    const isExpected = (e: { status: TimelineStatus }) => e.status === "expected" || e.status === "late";
+    const pos = d.events.filter((e) => e.amount > 0 && e.status !== "realized");
+    return {
+      date: d.date,
+      balanceAll: d.closing / 100,
+      balanceConfirmed: confirmedOnly.days[i].closing / 100,
+      incomeConfirmed: sum(pos.filter((e) => !isExpected(e)).map((e) => e.amount)) / 100,
+      incomeExpected: sum(pos.filter(isExpected).map((e) => e.amount)) / 100,
+      expenses: d.outflow / 100,
+    };
+  });
+  const expectedIncome: ExpectedIncomeItem[] = withExpected.events
+    .filter((e) => e.amount > 0 && (e.status === "expected" || e.status === "late"))
+    .map((e) => ({ date: e.date, label: e.label, amount: e.amount, late: e.status === "late" }));
+
   const free = freeToSpend(timeline, { reserve: input.reserve, safetyMargin: input.safetyMargin });
 
   const accounts = input.accounts.map((a) => {
@@ -121,8 +162,21 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
     return c?.name ?? "Sem categoria";
   };
+  const topNode = (id: string | null) => {
+    let c = id ? catName.get(id) : undefined;
+    while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
+    return c;
+  };
   const cat = new Map<string, number>();
-  for (const l of lines) cat.set(topName(l.categoryId), (cat.get(topName(l.categoryId)) ?? 0) + l.amount);
+  const catColor = new Map<string, string>();
+  for (const l of lines) {
+    const name = topName(l.categoryId);
+    cat.set(name, (cat.get(name) ?? 0) + l.amount);
+    if (!catColor.has(name)) {
+      const node = topNode(l.categoryId);
+      catColor.set(name, categoryColor({ id: node?.id ?? name, name, parentId: null, kind: "expense", color: node?.color ?? null }, []));
+    }
+  }
 
   const recent = [...base.entries]
     .filter((e: AccountEntry) => e.status === "confirmed" && e.date <= today)
@@ -158,6 +212,7 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     byCategory: [...cat.entries()]
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
-      .map(([name, amount]) => ({ name, amount: amount as Cents })),
+      .map(([name, amount]) => ({ name, amount: amount as Cents, color: catColor.get(name)! })),
+    chart: { days: chartDays, expectedIncome, defaultShowExpected: base.includeExpectedIncome },
   };
 }

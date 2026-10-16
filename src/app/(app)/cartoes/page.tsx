@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CardsView } from "@/components/cards/cards-view";
 import { loadCards } from "@/lib/data/cards";
 import { loadProfile } from "@/lib/data/finance";
+import { syncFixedIncome } from "@/lib/data/fixed-income";
 import { syncSubscriptions } from "@/lib/data/subscriptions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,7 +12,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const supabase = await createClient();
   const profile = await loadProfile(supabase);
-  await syncSubscriptions(supabase, profile);
+  await Promise.all([syncSubscriptions(supabase, profile), syncFixedIncome(supabase, profile)]);
   const { cards, accounts } = await loadCards(supabase, profile);
   return <CardsView cards={cards} accounts={accounts} openNew={sp.novo === "1"} />;
 }

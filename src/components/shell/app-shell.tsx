@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Ellipsis, LogOut } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CoinToggle } from "@/components/brand/coin-toggle";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/lib/theme/provider";
 import type { Theme } from "@/lib/theme/shared";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { NAV } from "./nav";
 import { QuickEntryButton } from "@/components/entries/entry-dialog";
 import type { QuickEntryData } from "@/lib/data/ledger";
@@ -38,6 +39,11 @@ export function AppShell({
     if (profileTheme && profileTheme !== theme) toggle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileTheme]);
+
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => setMoreOpen(false), [pathname]);
+  const moreItems = NAV.filter((item) => item.more);
+  const moreActive = moreItems.some((item) => isActive(pathname, item.href));
 
   const initials = user.name.trim().slice(0, 1).toUpperCase() || "?";
 
@@ -115,14 +121,14 @@ export function AppShell({
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar/88 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
       >
         <ul className="mx-auto flex max-w-md">
-          {NAV.filter((item) => !item.desktopOnly).map((item) => {
+          {NAV.filter((item) => !item.more).map((item) => {
             const active = isActive(pathname, item.href);
             return (
-              <li key={item.href} className="flex-1">
+              <li key={item.href} className="min-w-0 flex-1">
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={cn("relative flex h-16 flex-col items-center justify-center gap-1 text-xs font-medium", active ? "text-accent" : "text-ink-3")}
+                  className={cn("relative flex h-16 flex-col items-center justify-center gap-1 whitespace-nowrap text-[0.6875rem] font-medium", active ? "text-accent" : "text-ink-3")}
                 >
                   {active && <span aria-hidden className="absolute top-0 h-[2px] w-8 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />}
                   <item.icon className="size-[22px]" strokeWidth={active ? 2.3 : 1.8} />
@@ -131,8 +137,53 @@ export function AppShell({
               </li>
             );
           })}
+          <li className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              aria-haspopup="dialog"
+              className={cn("relative flex h-16 w-full flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium", moreActive ? "text-accent" : "text-ink-3")}
+            >
+              {moreActive && <span aria-hidden className="absolute top-0 h-[2px] w-8 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />}
+              <Ellipsis className="size-[22px]" strokeWidth={moreActive ? 2.3 : 1.8} />
+              Mais
+            </button>
+          </li>
         </ul>
       </nav>
+
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+        <DialogContent title="Mais opções" className="[--dialog-w:420px] lg:hidden">
+          <ul className="grid gap-1 p-3">
+            {moreItems.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn("flex h-12 items-center gap-3 rounded-xl px-3 font-medium", active ? "bg-accent-soft text-accent" : "text-ink hover:bg-surface-2")}
+                  >
+                    <item.icon className="size-5" />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+            {signOutAction && (
+              <li>
+                <form action={signOutAction}>
+                  <button type="submit" className="flex h-12 w-full items-center gap-3 rounded-xl px-3 font-medium text-ink-2 hover:bg-surface-2 hover:text-ink">
+                    <LogOut className="size-5" />
+                    Sair
+                  </button>
+                </form>
+              </li>
+            )}
+          </ul>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

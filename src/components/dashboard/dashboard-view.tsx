@@ -8,7 +8,7 @@ import { formatDateBR } from "@/domain/dates";
 import { formatBRL } from "@/domain/money";
 import type { TimelineStatus } from "@/domain/timeline";
 import { cn } from "@/lib/cn";
-import { BalanceChart } from "./balance-chart-lazy";
+import { FinanceCharts } from "./finance-charts-lazy";
 import { BankCardFace } from "@/components/cards/bank-card-face";
 
 const HORIZONS = [
@@ -121,8 +121,8 @@ export function DashboardView({
             </p>
           )}
 
-          <div className="chart-glow -mx-2 mt-6">
-            <BalanceChart series={model.series} reserve={t.reserve} />
+          <div className="chart-glow mt-6">
+            <FinanceCharts model={model} />
           </div>
         </Panel>
 
@@ -241,7 +241,7 @@ export function DashboardView({
                 return (
                   <li key={c.name} className="grid gap-1.5">
                     <span className="flex justify-between text-sm"><span>{c.name}</span><Money value={c.amount} className="text-ink-2" /></span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: c.color }} /></span>
                   </li>
                 );
               })}

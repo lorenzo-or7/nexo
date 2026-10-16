@@ -8,6 +8,7 @@ import type { Account, AccountEntry } from "@/domain/ledger";
 import type { Cents } from "@/domain/money";
 import type { TimelineCard } from "@/domain/timeline";
 import { signImages } from "./cards";
+import { loadFixedIncomeRows, projectFixedIncome } from "./fixed-income";
 import { loadSubscriptionRows, projectSubscriptions } from "./subscriptions";
 
 export interface Profile {
@@ -60,7 +61,7 @@ export async function loadDashboardInput(
     must<Record<string, unknown>[]>(supabase.from("account_entries").select("*").is("deleted_at", null)),
     must<Record<string, unknown>[]>(supabase.from("card_charges").select("*").is("cancelled_at", null)),
     must<Record<string, unknown>[]>(supabase.from("invoice_overrides").select("*")),
-    must<Record<string, unknown>[]>(supabase.from("categories").select("id,name,parent_id")),
+    must<Record<string, unknown>[]>(supabase.from("categories").select("id,name,parent_id,color")),
   ]);
 
   const domainAccounts: Account[] = accounts.map((a) => ({
@@ -132,6 +133,10 @@ export async function loadDashboardInput(
     t.charges = [...t.charges, ...projected.cardCharges.filter((x) => x.cardId === t.id)];
   }
 
+  // renda fixa (salário e clientes): meses futuros entram como recebimentos previstos
+  const fixedRows = (await loadFixedIncomeRows(supabase).catch(() => null)) ?? [];
+  domainEntries.push(...projectFixedIncome(fixedRows, today).filter((e) => domainAccounts.some((a) => a.id === e.accountId)));
+
   const accountMeta: AccountMeta[] = accounts.map((a) => ({
     id: a.id as string,
     name: (a.nickname as string) || (a.name as string),
@@ -156,6 +161,7 @@ export async function loadDashboardInput(
     id: x.id as string,
     name: x.name as string,
     parentId: (x.parent_id as string | null) ?? null,
+    color: (x.color as string | null) ?? null,
   }));
 
   return {

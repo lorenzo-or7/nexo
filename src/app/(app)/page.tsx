@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/card";
 import { buildDashboard } from "@/domain/dashboard";
 import { loadDashboardInput, loadProfile } from "@/lib/data/finance";
+import { syncFixedIncome } from "@/lib/data/fixed-income";
 import { syncSubscriptions } from "@/lib/data/subscriptions";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
@@ -18,7 +19,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const horizon = (HORIZONS as readonly string[]).includes(sp.h ?? "") ? (sp.h as (typeof HORIZONS)[number]) : "month";
   const supabase = await createClient();
   const profile = await loadProfile(supabase);
-  await syncSubscriptions(supabase, profile);
+  await Promise.all([syncSubscriptions(supabase, profile), syncFixedIncome(supabase, profile)]);
   const model = buildDashboard(await loadDashboardInput(supabase, profile, horizon));
 
   return (
