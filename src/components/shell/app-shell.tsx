@@ -118,9 +118,12 @@ export function AppShell({
           <CoinToggle />
         </header>
 
-        <main className="rise w-full max-w-[1520px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-9">{children}
-          <DeveloperSignature size="sm" className="mt-14" />
-        </main>
+        <main className="rise w-full max-w-[1520px] flex-1 px-4 pb-8 pt-6 sm:px-6 lg:px-8 lg:pt-9">{children}</main>
+
+        {/* assinatura: colada ao rodapé da área de conteúdo, fora do fluxo das páginas */}
+        <footer className="px-4 pb-28 pt-4 lg:pb-5">
+          <DeveloperSignature size="sm" />
+        </footer>
       </div>
 
       {quickEntry && <QuickEntryButton data={quickEntry} variant="fab" />}
