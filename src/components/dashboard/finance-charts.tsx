@@ -11,6 +11,7 @@ import {
   Line,
   Pie,
   PieChart,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -35,6 +36,9 @@ const C = {
   balance: "var(--accent)",
   muted: "var(--ink-3)",
 };
+
+/** acima de tudo (inclusive do texto no centro da rosca) e opaco */
+const TIP_STYLE = { zIndex: 60, outline: "none" } as const;
 
 const brl = (v: number) => formatBRL(Math.round(v * 100) as Cents);
 const short = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
@@ -113,7 +117,7 @@ function Tip({ p, render }: { p: TooltipContentProps; render: (row: Record<strin
   if (!p.active || !p.payload?.length) return null;
   const row = p.payload[0].payload as Record<string, unknown>;
   return (
-    <div className="min-w-44 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm shadow-lg">
+    <div className="min-w-48 whitespace-nowrap rounded-xl border border-border-strong bg-surface px-3 py-2.5 text-sm shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)]">
       <p className="mb-1.5 font-medium text-ink">{String(row.title ?? "")}</p>
       <div className="grid gap-1">{render(row)}</div>
     </div>
@@ -165,25 +169,25 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
   const [showIncome, setShowIncome] = useState(true);
   const [showExpenses, setShowExpenses] = useState(true);
   const [table, setTable] = useState(false);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
 
   const hasExpected = chart.expectedIncome.length > 0;
   const expectedTotal = chart.expectedIncome.reduce((t, e) => t + e.amount, 0);
   const buckets = useMemo(() => bucketize(chart.days), [chart.days]);
   const reserve = model.totals.reserve / 100;
 
-  const saldoData = useMemo(
-    () =>
-      chart.days.map((d) => {
-        const main = showExpected ? d.balanceAll : d.balanceConfirmed;
-        return {
-          ...d,
-          title: formatDateBR(d.date),
-          main,
-          marker: showExpected && d.incomeExpected > 0 ? main : null,
-        };
-      }),
-    [chart.days, showExpected],
-  );
+  const saldoData = useMemo(() => {
+    const rows = chart.days.map((d) => {
+      const main = showExpected ? d.balanceAll : d.balanceConfirmed;
+      return { ...d, title: formatDateBR(d.date), main, marker: showExpected && d.incomeExpected > 0 ? main : null, minMarker: null as number | null };
+    });
+    // marca o dia do menor saldo (o "gargalo" que define quanto dá para gastar)
+    if (rows.length > 1) {
+      const minIdx = rows.reduce((m, d, i) => (d.main < rows[m].main ? i : m), 0);
+      rows[minIdx].minMarker = rows[minIdx].main;
+    }
+    return rows;
+  }, [chart.days, showExpected]);
   const minBalance = Math.min(0, ...saldoData.map((d) => d.main));
 
   const catTotal = byCategory.reduce((t, c) => t + c.amount, 0);
@@ -193,6 +197,13 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
     if (rest > 0) top.push({ name: "Outras", value: rest / 100, color: "#5C677D", pct: catTotal ? Math.round((rest / catTotal) * 100) : 0 });
     return top;
   }, [byCategory, catTotal]);
+
+  const fluxoTotals = useMemo(() => {
+    const conf = buckets.rows.reduce((t, b) => t + b.incomeConfirmed, 0);
+    const exp = buckets.rows.reduce((t, b) => t + b.incomeExpected, 0);
+    const out = buckets.rows.reduce((t, b) => t + b.expenses, 0);
+    return { conf, exp, out, net: conf + (showExpected ? exp : 0) - out };
+  }, [buckets.rows, showExpected]);
 
   const grid = <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="2 6" />;
   const axisTick = { fill: "var(--ink-3)", fontSize: 12 };
@@ -290,6 +301,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
         {view === "saldo" && (
           <>
             <li className="flex items-center gap-2"><Swatch color={C.balance} />{showExpected && hasExpected ? "Saldo com previstas" : "Saldo previsto"}</li>
+            <li className="flex items-center gap-2"><span aria-hidden className="size-3 rounded-full border-2" style={{ borderColor: minBalance < 0 ? "var(--negative)" : "var(--warning)" }} />Menor saldo</li>
             {showExpected && hasExpected && (
               <>
                 <li className="flex items-center gap-2"><Swatch color={C.muted} line />Só o confirmado</li>
@@ -341,9 +353,11 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                 {grid}
                 <XAxis dataKey="date" tickFormatter={short} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
                 <YAxis width={56} domain={[minBalance < 0 ? "dataMin" : 0, "auto"]} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
+                {minBalance < 0 && <ReferenceArea y1={minBalance} y2={0} fill="var(--negative)" fillOpacity={0.09} ifOverflow="extendDomain" />}
                 {minBalance < 0 && <ReferenceLine y={0} stroke="var(--negative)" strokeDasharray="4 4" />}
                 {reserve > 0 && <ReferenceLine y={reserve} stroke="var(--warning)" strokeDasharray="2 4" />}
                 <Tooltip
+                  wrapperStyle={TIP_STYLE}
                   cursor={{ stroke: "var(--border-strong)" }}
                   content={(p) => (
                     <Tip
@@ -357,6 +371,17 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                           {(r.incomeExpected as number) > 0 && showExpected && <TipRow color={C.expected} label="Receita prevista" value={`+${brl(r.incomeExpected as number)}`} />}
                           {(r.incomeConfirmed as number) > 0 && <TipRow color={C.income} label="Entrada" value={`+${brl(r.incomeConfirmed as number)}`} />}
                           {(r.expenses as number) > 0 && <TipRow color={C.expense} label="Saídas" value={`-${brl(r.expenses as number)}`} />}
+                          {(r.items as { label: string; amount: number }[]).length > 0 && (
+                            <ul className="mt-1.5 grid gap-0.5 border-t border-border pt-1.5 text-xs text-ink-3">
+                              {(r.items as { label: string; amount: number }[]).map((it, i) => (
+                                <li key={i} className="flex items-center justify-between gap-4">
+                                  <span className="max-w-40 truncate">{it.label}</span>
+                                  <span className="tabular" style={{ color: it.amount > 0 ? C.income : C.expense }}>{it.amount > 0 ? "+" : "-"}{brl(Math.abs(it.amount))}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {r.minMarker != null && <p className="mt-1 text-xs text-warning">Menor saldo do período</p>}
                         </>
                       )}
                     />
@@ -390,6 +415,16 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                     }
                   />
                 )}
+                <Line
+                  dataKey="minMarker"
+                  name="Menor saldo"
+                  stroke="none"
+                  isAnimationActive={false}
+                  activeDot={false}
+                  dot={(d: { cx?: number; cy?: number; index?: number }) =>
+                    d.cx == null || d.cy == null ? <g key={d.index} /> : <circle key={d.index} cx={d.cx} cy={d.cy} r={6} fill="var(--surface)" stroke={minBalance < 0 ? "var(--negative)" : "var(--warning)"} strokeWidth={2.5} />
+                  }
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -407,6 +442,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                 <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={20} />
                 <YAxis width={56} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
                 <Tooltip
+                  wrapperStyle={TIP_STYLE}
                   cursor={fluxoStyle === "lines" ? { stroke: "var(--border-strong)" } : { fill: "var(--surface-2)", fillOpacity: 0.5 }}
                   content={(p) => (
                     <Tip
@@ -444,20 +480,30 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
             <div className="relative mx-auto h-56 w-56" role="img" aria-label={description}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Tooltip content={(p) => <CatTip p={p} />} />
-                  <Pie data={catRows} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="94%" paddingAngle={2} stroke="var(--surface)" strokeWidth={2} isAnimationActive={false}>
-                    {catRows.map((c) => <Cell key={c.name} fill={c.color} />)}
+                  <Pie data={catRows} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="94%" paddingAngle={2} stroke="var(--surface)" strokeWidth={2} isAnimationActive={false} onMouseEnter={(_, i) => setActiveCat(catRows[i]?.name ?? null)} onMouseLeave={() => setActiveCat(null)}>
+                    {catRows.map((c) => <Cell key={c.name} fill={c.color} fillOpacity={activeCat && activeCat !== c.name ? 0.3 : 1} style={{ cursor: "pointer", outline: "none" }} />)}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                <div>
-                  <p className="text-xs text-ink-3">Despesas do mês</p>
-                  <p className="tabular text-lg font-semibold">{brl(catTotal / 100)}</p>
-                </div>
+                {(() => {
+                  const a = catRows.find((c) => c.name === activeCat);
+                  return a ? (
+                    <div className="max-w-[8rem]">
+                      <p className="truncate text-xs font-medium" style={{ color: "var(--ink-2)" }}>{a.name}</p>
+                      <p className="tabular text-lg font-semibold">{brl(a.value)}</p>
+                      <p className="text-xs text-ink-3">{a.pct}% das despesas</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-ink-3">Despesas do mês</p>
+                      <p className="tabular text-lg font-semibold">{brl(catTotal / 100)}</p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-            <CatLegend rows={catRows} />
+            <CatLegend rows={catRows} active={activeCat} onActive={setActiveCat} />
           </div>
         ) : (
           <div style={{ height: Math.max(180, catRows.length * 40 + 16) }} className="w-full" role="img" aria-label={description}>
@@ -466,7 +512,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                 <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="2 6" />
                 <XAxis type="number" tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" width={96} tick={{ fill: "var(--ink-2)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip cursor={{ fill: "var(--surface-2)", fillOpacity: 0.5 }} content={(p) => <CatTip p={p} />} />
+                <Tooltip wrapperStyle={TIP_STYLE} cursor={{ fill: "var(--surface-2)", fillOpacity: 0.5 }} content={(p) => <CatTip p={p} />} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false}>
                   {catRows.map((c) => <Cell key={c.name} fill={c.color} />)}
                 </Bar>
@@ -475,6 +521,22 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
           </div>
         )}
       </div>
+
+      {view === "fluxo" && (
+        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Receitas confirmadas", value: fluxoTotals.conf, color: C.income },
+            { label: "Receitas previstas", value: fluxoTotals.exp, color: C.expected, hatched: true },
+            { label: "Saídas", value: fluxoTotals.out, color: C.expense },
+            { label: "Resultado do período", value: fluxoTotals.net, color: fluxoTotals.net < 0 ? "var(--negative)" : C.income },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl border border-border bg-field/50 px-3 py-2.5">
+              <dt className="flex items-center gap-2 text-xs text-ink-3"><Swatch color={k.color} hatched={k.hatched} />{k.label}</dt>
+              <dd className="tabular mt-1 text-base font-semibold">{brl(k.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {/* espaço próprio das receitas previstas */}
       {view !== "categorias" && (
@@ -514,18 +576,18 @@ function CatTip({ p }: { p: TooltipContentProps }) {
   if (!p.active || !p.payload?.length) return null;
   const r = p.payload[0].payload as { name: string; value: number; color: string; pct: number };
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm shadow-lg">
+    <div className="whitespace-nowrap rounded-xl border border-border-strong bg-surface px-3 py-2.5 text-sm shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)]">
       <p className="mb-1 font-medium">{r.name}</p>
       <TipRow color={r.color} label={`${r.pct}% das despesas`} value={brl(r.value)} />
     </div>
   );
 }
 
-function CatLegend({ rows }: { rows: { name: string; value: number; color: string; pct: number }[] }) {
+function CatLegend({ rows, active, onActive }: { rows: { name: string; value: number; color: string; pct: number }[]; active: string | null; onActive: (n: string | null) => void }) {
   return (
-    <ul className="grid gap-2.5">
+    <ul className="grid gap-1">
       {rows.map((c) => (
-        <li key={c.name} className="flex items-center justify-between gap-3 text-sm">
+        <li key={c.name} onMouseEnter={() => onActive(c.name)} onMouseLeave={() => onActive(null)} className={cn("flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-sm transition-opacity", active && active !== c.name && "opacity-40", active === c.name && "bg-surface-2")}>
           <span className="flex min-w-0 items-center gap-2.5">
             <span aria-hidden className="size-3 shrink-0 rounded-[4px]" style={{ background: c.color }} />
             <span className="truncate text-ink-2">{c.name}</span>

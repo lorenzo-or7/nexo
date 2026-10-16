@@ -44,6 +44,8 @@ export interface ChartDay {
   incomeConfirmed: number;
   incomeExpected: number;
   expenses: number;
+  /** o que acontece no dia (para o tooltip) */
+  items: { label: string; amount: number }[];
 }
 
 export interface ExpectedIncomeItem {
@@ -116,6 +118,7 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
       incomeConfirmed: sum(pos.filter((e) => !isExpected(e)).map((e) => e.amount)) / 100,
       incomeExpected: sum(pos.filter(isExpected).map((e) => e.amount)) / 100,
       expenses: d.outflow / 100,
+      items: d.events.filter((e) => e.status !== "realized").slice(0, 5).map((e) => ({ label: e.label, amount: e.amount / 100 })),
     };
   });
   const expectedIncome: ExpectedIncomeItem[] = withExpected.events
