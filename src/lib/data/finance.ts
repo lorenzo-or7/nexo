@@ -55,14 +55,17 @@ export async function loadDashboardInput(
   horizon: DashboardInput["horizon"],
 ): Promise<DashboardInput> {
   const today = todayIn(profile.timezone);
-  const [accounts, cards, entries, charges, overrides, categories] = await Promise.all([
+  const [accounts, cards, entries, charges, overrides, categories, purchases] = await Promise.all([
     must<Record<string, unknown>[]>(supabase.from("accounts").select("*").is("archived_at", null).order("sort_order")),
     must<Record<string, unknown>[]>(supabase.from("cards").select("*").is("archived_at", null).order("sort_order")),
     must<Record<string, unknown>[]>(supabase.from("account_entries").select("*").is("deleted_at", null)),
     must<Record<string, unknown>[]>(supabase.from("card_charges").select("*").is("cancelled_at", null)),
     must<Record<string, unknown>[]>(supabase.from("invoice_overrides").select("*")),
     must<Record<string, unknown>[]>(supabase.from("categories").select("id,name,parent_id,color")),
+    // a categoria de uma compra no cartão fica na compra, não nas parcelas
+    must<Record<string, unknown>[]>(supabase.from("purchases").select("id,category_id").not("category_id", "is", null)),
   ]);
+  const purchaseCategory = new Map(purchases.map((p) => [p.id as string, p.category_id as string]));
 
   const domainAccounts: Account[] = accounts.map((a) => ({
     id: a.id as string,
@@ -113,6 +116,7 @@ export async function loadDashboardInput(
         amount: c(x.amount_cents),
         date: x.occurred_on as string,
         kind: x.kind as CardCharge["kind"],
+        categoryId: x.purchase_id ? purchaseCategory.get(x.purchase_id as string) ?? null : null,
       }));
     const payments: CardPayment[] = domainEntries
       .filter((e) => e.kind === "invoice_payment" && e.cardId === k.id && e.status === "confirmed")

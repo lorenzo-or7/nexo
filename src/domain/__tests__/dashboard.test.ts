@@ -44,4 +44,17 @@ describe("dashboard derivado dos dados", () => {
     expect(d.chart.expectedIncome.map((e) => e.amount)).toEqual([81268, 48899]);
     expect(d.chart.days.reduce((t, x) => t + x.incomeConfirmed, 0)).toBe(0);
   });
+
+  it("agrupa compras no cartão pela categoria da compra", () => {
+    const i = { ...input(), categories: [{ id: "cat-a", name: "Alimentação", parentId: null as string | null, color: "#2F9E44" }] };
+    const today = i.base.today;
+    i.base.cards[0].charges = [
+      ...i.base.cards[0].charges,
+      { id: "ch-x", cardId: i.base.cards[0].id, invoiceRef: today.slice(0, 7), amount: 4000 as Cents, date: today, kind: "installment", purchaseId: "p1", installmentNumber: 1, installmentCount: 1, categoryId: "cat-a" },
+    ];
+    const d = buildDashboard(i);
+    const food = d.byCategory.find((c) => c.name === "Alimentação");
+    expect(food?.amount).toBe(4000);
+    expect(food?.color).toBe("#2F9E44");
+  });
 });

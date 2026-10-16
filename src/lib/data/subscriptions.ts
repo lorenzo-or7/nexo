@@ -162,7 +162,7 @@ export function projectSubscriptions(
       } else if (r.payWith === "card" && r.cardId) {
         const cfg = cardConfigs.get(r.cardId);
         if (!cfg) continue;
-        cardCharges.push({ id, cardId: r.cardId, invoiceRef: invoiceRefForPurchase(cfg, o.date), amount: o.amount, date: o.date, kind: "installment", installmentNumber: 1, installmentCount: 1 });
+        cardCharges.push({ id, cardId: r.cardId, invoiceRef: invoiceRefForPurchase(cfg, o.date), amount: o.amount, date: o.date, kind: "installment", installmentNumber: 1, installmentCount: 1, categoryId: r.categoryId });
       }
     }
   }

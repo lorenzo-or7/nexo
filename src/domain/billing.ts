@@ -91,6 +91,8 @@ export interface CardCharge {
   kind: ChargeKind;
   cancelled?: boolean;
   hypothetical?: boolean;
+  /** categoria da compra (vem da compra, não da parcela) */
+  categoryId?: string | null;
 }
 
 export interface CreditPurchaseInput {

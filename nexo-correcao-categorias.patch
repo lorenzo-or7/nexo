@@ -1,0 +1,100 @@
+From f7ecdccc75c313c8edff4fecdbdd7f2ad96a039d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 16 Oct 2026 00:08:41 -0300
+Subject: [PATCH] =?UTF-8?q?Gr=C3=A1fico=20de=20categorias:=20compras=20no?=
+ =?UTF-8?q?=20cart=C3=A3o=20usam=20a=20categoria=20da=20compra?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Fkt9U37Kmg3JNhNYXfmu7o
+---
+ src/domain/__tests__/dashboard.test.ts | 13 +++++++++++++
+ src/domain/billing.ts                  |  2 ++
+ src/lib/data/finance.ts                |  6 +++++-
+ src/lib/data/subscriptions.ts          |  2 +-
+ 4 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/src/domain/__tests__/dashboard.test.ts b/src/domain/__tests__/dashboard.test.ts
+index fa8e35b..e849445 100644
+--- a/src/domain/__tests__/dashboard.test.ts
++++ b/src/domain/__tests__/dashboard.test.ts
+@@ -44,4 +44,17 @@ describe("dashboard derivado dos dados", () => {
+     expect(d.chart.expectedIncome.map((e) => e.amount)).toEqual([81268, 48899]);
+     expect(d.chart.days.reduce((t, x) => t + x.incomeConfirmed, 0)).toBe(0);
+   });
++
++  it("agrupa compras no cartão pela categoria da compra", () => {
++    const i = { ...input(), categories: [{ id: "cat-a", name: "Alimentação", parentId: null as string | null, color: "#2F9E44" }] };
++    const today = i.base.today;
++    i.base.cards[0].charges = [
++      ...i.base.cards[0].charges,
++      { id: "ch-x", cardId: i.base.cards[0].id, invoiceRef: today.slice(0, 7), amount: 4000 as Cents, date: today, kind: "installment", purchaseId: "p1", installmentNumber: 1, installmentCount: 1, categoryId: "cat-a" },
++    ];
++    const d = buildDashboard(i);
++    const food = d.byCategory.find((c) => c.name === "Alimentação");
++    expect(food?.amount).toBe(4000);
++    expect(food?.color).toBe("#2F9E44");
++  });
+ });
+diff --git a/src/domain/billing.ts b/src/domain/billing.ts
+index 45be772..70510cd 100644
+--- a/src/domain/billing.ts
++++ b/src/domain/billing.ts
+@@ -91,6 +91,8 @@ export interface CardCharge {
+   kind: ChargeKind;
+   cancelled?: boolean;
+   hypothetical?: boolean;
++  /** categoria da compra (vem da compra, não da parcela) */
++  categoryId?: string | null;
+ }
+ 
+ export interface CreditPurchaseInput {
+diff --git a/src/lib/data/finance.ts b/src/lib/data/finance.ts
+index 19661a5..6ab3c44 100644
+--- a/src/lib/data/finance.ts
++++ b/src/lib/data/finance.ts
+@@ -55,14 +55,17 @@ export async function loadDashboardInput(
+   horizon: DashboardInput["horizon"],
+ ): Promise<DashboardInput> {
+   const today = todayIn(profile.timezone);
+-  const [accounts, cards, entries, charges, overrides, categories] = await Promise.all([
++  const [accounts, cards, entries, charges, overrides, categories, purchases] = await Promise.all([
+     must<Record<string, unknown>[]>(supabase.from("accounts").select("*").is("archived_at", null).order("sort_order")),
+     must<Record<string, unknown>[]>(supabase.from("cards").select("*").is("archived_at", null).order("sort_order")),
+     must<Record<string, unknown>[]>(supabase.from("account_entries").select("*").is("deleted_at", null)),
+     must<Record<string, unknown>[]>(supabase.from("card_charges").select("*").is("cancelled_at", null)),
+     must<Record<string, unknown>[]>(supabase.from("invoice_overrides").select("*")),
+     must<Record<string, unknown>[]>(supabase.from("categories").select("id,name,parent_id,color")),
++    // a categoria de uma compra no cartão fica na compra, não nas parcelas
++    must<Record<string, unknown>[]>(supabase.from("purchases").select("id,category_id").not("category_id", "is", null)),
+   ]);
++  const purchaseCategory = new Map(purchases.map((p) => [p.id as string, p.category_id as string]));
+ 
+   const domainAccounts: Account[] = accounts.map((a) => ({
+     id: a.id as string,
+@@ -113,6 +116,7 @@ export async function loadDashboardInput(
+         amount: c(x.amount_cents),
+         date: x.occurred_on as string,
+         kind: x.kind as CardCharge["kind"],
++        categoryId: x.purchase_id ? purchaseCategory.get(x.purchase_id as string) ?? null : null,
+       }));
+     const payments: CardPayment[] = domainEntries
+       .filter((e) => e.kind === "invoice_payment" && e.cardId === k.id && e.status === "confirmed")
+diff --git a/src/lib/data/subscriptions.ts b/src/lib/data/subscriptions.ts
+index 0fb8739..99d5a9d 100644
+--- a/src/lib/data/subscriptions.ts
++++ b/src/lib/data/subscriptions.ts
+@@ -162,7 +162,7 @@ export function projectSubscriptions(
+       } else if (r.payWith === "card" && r.cardId) {
+         const cfg = cardConfigs.get(r.cardId);
+         if (!cfg) continue;
+-        cardCharges.push({ id, cardId: r.cardId, invoiceRef: invoiceRefForPurchase(cfg, o.date), amount: o.amount, date: o.date, kind: "installment", installmentNumber: 1, installmentCount: 1 });
++        cardCharges.push({ id, cardId: r.cardId, invoiceRef: invoiceRefForPurchase(cfg, o.date), amount: o.amount, date: o.date, kind: "installment", installmentNumber: 1, installmentCount: 1, categoryId: r.categoryId });
+       }
+     }
+   }
+-- 
+2.43.0
+
