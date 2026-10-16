@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { BrandImages } from "@/components/brand/logo";
 import { CoinToggle } from "@/components/brand/coin-toggle";
 import { SetupGuide } from "@/components/setup/setup-guide";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -9,18 +9,7 @@ function BrandLockup({ size = "lg" }: { size?: "lg" | "sm" }) {
   const lg = size === "lg";
   return (
     <div className="flex flex-col items-center text-center">
-      <div className="relative">
-                <Image
-          src="/brand/mark-full.png"
-          alt=""
-          width={440}
-          height={370}
-          priority
-          className={lg ? "h-auto w-[200px] xl:w-[230px]" : "h-auto w-[64px]"}
-        />
-      </div>
-      <Image src="/brand/wordmark-on-light.png" alt="NEXO" width={757} height={156} priority className={`${lg ? "mt-8 w-[230px] xl:w-[260px]" : "mt-4 w-[120px]"} h-auto dark:hidden`} />
-      <Image src="/brand/wordmark-on-dark.png" alt="NEXO" width={757} height={156} priority className={`${lg ? "mt-8 w-[230px] xl:w-[260px]" : "mt-4 w-[120px]"} hidden h-auto dark:block`} />
+      <BrandImages large={lg} />
       <p className={`${lg ? "mt-5 text-[0.8125rem] tracking-[0.42em]" : "mt-3 text-[0.625rem] tracking-[0.36em]"} font-light text-plum/80 dark:text-blush/85`}>
         SEU DINHEIRO. TUDO CONECTADO<span className="text-crimson dark:text-rose">●</span>
       </p>
@@ -32,27 +21,27 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <aside className="hidden p-3 lg:sticky lg:top-0 lg:block lg:h-dvh">
-        <div className="panel relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-blush p-12 dark:bg-[#1c0b1f]">
+        <div className="panel relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-blush p-12 dark:bg-sidebar">
           {/* órbitas finas ao redor do símbolo: desenho estático, sem custo de animação */}
           <svg aria-hidden className="absolute left-1/2 top-[44%] h-[150%] w-[150%] -translate-x-1/2 -translate-y-1/2" viewBox="0 0 800 800">
             <defs>
               <radialGradient id="auth-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stopColor="#c20f49" stopOpacity="0.35" />
-                <stop offset="1" stopColor="#c20f49" stopOpacity="0" />
+                <stop offset="0" stopColor="var(--brand-crimson)" stopOpacity="0.35" />
+                <stop offset="1" stopColor="var(--brand-crimson)" stopOpacity="0" />
               </radialGradient>
               <linearGradient id="auth-ring" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#f25c8d" stopOpacity="0.55" />
-                <stop offset="0.5" stopColor="#f25c8d" stopOpacity="0.04" />
-                <stop offset="1" stopColor="#c20f49" stopOpacity="0.35" />
+                <stop offset="0" stopColor="var(--brand-rose)" stopOpacity="0.55" />
+                <stop offset="0.5" stopColor="var(--brand-rose)" stopOpacity="0.04" />
+                <stop offset="1" stopColor="var(--brand-crimson)" stopOpacity="0.35" />
               </linearGradient>
             </defs>
             <circle cx="400" cy="400" r="210" fill="url(#auth-core)" />
             {[150, 210, 280, 360].map((r) => (
               <circle key={r} cx="400" cy="400" r={r} fill="none" stroke="url(#auth-ring)" strokeWidth="1" />
             ))}
-            <circle cx="610" cy="400" r="3.5" fill="#f25c8d" />
-            <circle cx="202" cy="268" r="2.5" fill="#f25c8d" opacity="0.7" />
-            <circle cx="545" cy="660" r="2" fill="#f7edf3" opacity="0.6" />
+            <circle cx="610" cy="400" r="3.5" fill="var(--brand-rose)" />
+            <circle cx="202" cy="268" r="2.5" fill="var(--brand-rose)" opacity="0.7" />
+            <circle cx="545" cy="660" r="2" fill="var(--brand-blush)" opacity="0.6" />
           </svg>
           <div className="relative">
             <BrandLockup />

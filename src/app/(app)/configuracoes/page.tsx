@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Repeat, Tags } from "lucide-react";
 import { PageHeader } from "@/components/shell/app-shell";
+import { AppearanceForm } from "@/components/settings/appearance";
 import { DeleteAccountForm, DemoClear, DemoLoader, ExportButton, ProfileForm } from "@/components/settings/forms";
 import { Panel, PanelHeader } from "@/components/ui/card";
 import { formatBRL, type Cents } from "@/domain/money";
@@ -20,8 +21,12 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Configurações" subtitle="Perfil, projeções e seus dados." />
+      <PageHeader title="Configurações" subtitle="Aparência, perfil, projeções e seus dados." />
       <div className="grid max-w-3xl gap-6">
+        <Panel>
+          <PanelHeader title="Aparência" description="Escolha a paleta de cores e o modo claro ou escuro." />
+          <AppearanceForm />
+        </Panel>
         <Panel>
           <PanelHeader title="Perfil e projeções" />
           <ProfileForm

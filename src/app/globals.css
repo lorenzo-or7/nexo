@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./palettes.css";
 
 /* --------------------------------------------------------------------------
    NEXO design tokens
@@ -50,6 +51,17 @@
   --chart-income: #0f8a5f;
   --chart-expected: #4c5fd7;
   --chart-expense: #d97706;
+  --cta-1: #d4145a;
+  --cta-2: #c20f49;
+  --cta-3: #9e0c3c;
+  --cta-ink: #ffffff;
+  --cta-glow: rgb(194 15 73 / 0.85);
+  --cta-glow-hover: rgb(242 92 141 / 0.9);
+  --btn-p-1: #3d1f44;
+  --btn-p-2: #241127;
+  --btn-p-ink: #f7edf3;
+  --btn-p-glow: rgb(36 17 39 / 0.7);
+  --btn-p-glow-hover: rgb(194 15 73 / 0.55);
   color-scheme: light;
 }
 
@@ -88,6 +100,11 @@
   --chart-income: #5fd4a8;
   --chart-expected: #8ea2ff;
   --chart-expense: #ff9a62;
+  --btn-p-1: #d4145a;
+  --btn-p-2: #c20f49;
+  --btn-p-ink: #ffffff;
+  --btn-p-glow: rgb(194 15 73 / 0.85);
+  --btn-p-glow-hover: rgb(242 92 141 / 0.9);
   color-scheme: dark;
 }
 
@@ -121,6 +138,15 @@
   --radius-card: 1.25rem;
   --radius-control: 0.75rem;
   --shadow-card: var(--shadow);
+}
+
+/* moeda do alternador de tema: segue as cores da paleta (as variáveis --brand-* mudam por paleta) */
+:root {
+  --coin-dark-hi: color-mix(in oklab, var(--brand-plum) 82%, white);
+  --coin-dark-lo: var(--brand-plum);
+  --coin-ring-dark: var(--brand-rose);
+  --coin-light-lo: var(--brand-blush);
+  --coin-ring-light: var(--brand-crimson);
 }
 
 html {
@@ -285,18 +311,18 @@ body::before {
   color: transparent;
 }
 
-/* botão principal: degradê + brilho */
+/* botão principal: degradê + brilho (cores vêm da paleta ativa) */
 .btn-glow {
-  background: linear-gradient(135deg, #d4145a 0%, #c20f49 45%, #9e0c3c 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--cta-1) 0%, var(--cta-2) 45%, var(--cta-3) 100%);
+  color: var(--cta-ink);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.22),
-    0 10px 24px -12px rgb(194 15 73 / 0.85);
+    0 10px 24px -12px var(--cta-glow);
 }
 .btn-glow:hover {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.28),
-    0 14px 30px -12px rgb(242 92 141 / 0.9);
+    0 14px 30px -12px var(--cta-glow-hover);
 }
 
 /* reflexo que atravessa o cartão no hover (só transform: barato) */
@@ -314,20 +340,12 @@ body::before {
 
 
 .btn-primary {
-  background: linear-gradient(135deg, #3d1f44 0%, #241127 100%);
-  color: #f7edf3;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 10px 22px -12px rgb(36 17 39 / 0.7);
+  background: linear-gradient(135deg, var(--btn-p-1) 0%, var(--btn-p-2) 100%);
+  color: var(--btn-p-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 10px 22px -12px var(--btn-p-glow);
 }
 .btn-primary:hover {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 14px 28px -12px rgb(194 15 73 / 0.55);
-}
-[data-theme="dark"] .btn-primary {
-  background: linear-gradient(135deg, #d4145a 0%, #c20f49 45%, #9e0c3c 100%);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 10px 24px -12px rgb(194 15 73 / 0.85);
-}
-[data-theme="dark"] .btn-primary:hover {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 14px 30px -12px rgb(242 92 141 / 0.9);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 14px 28px -12px var(--btn-p-glow-hover);
 }
 
 }

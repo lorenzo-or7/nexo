@@ -16,6 +16,8 @@ export interface Profile {
   display_name: string | null;
   timezone: string;
   theme: "light" | "dark" | "system";
+  /** ausente até a migration da paleta ser executada */
+  palette?: string | null;
   include_expected_income: boolean;
   reserve_cents: number;
   safety_margin_cents: number;

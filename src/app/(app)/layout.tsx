@@ -3,6 +3,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { loadProfile } from "@/lib/data/finance";
 import { loadQuickEntryData } from "@/lib/data/ledger";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
+import { normalizePalette } from "@/lib/theme/palettes";
 import { normalizeTheme } from "@/lib/theme/shared";
 import { signOut } from "../(auth)/actions";
 
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       user={{ name: profile.display_name ?? user.email ?? "Você", email: user.email ?? "" }}
       profileTheme={profile.theme === "system" ? null : normalizeTheme(profile.theme)}
+      profilePalette={profile.palette ? normalizePalette(profile.palette) : null}
       signOutAction={signOut}
       quickEntry={quickEntry}
     >

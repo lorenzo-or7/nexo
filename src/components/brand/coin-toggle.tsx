@@ -32,12 +32,12 @@ export function CoinToggle({ className }: { className?: string }) {
         transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 90, damping: 14, mass: 0.9 }}
       >
         {/* face escura */}
-        <span className="absolute inset-0 grid place-items-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#4a2850,#241127_70%)] shadow-[inset_0_0_0_2px_rgba(242,92,141,0.55),inset_0_-3px_6px_rgba(0,0,0,0.4),0_4px_12px_-4px_rgba(36,17,39,0.6)] [backface-visibility:hidden]">
-          <Moon className="size-[18px] text-rose" strokeWidth={2.2} />
+        <span className="absolute inset-0 grid place-items-center rounded-full bg-[radial-gradient(circle_at_35%_30%,var(--coin-dark-hi),var(--coin-dark-lo)_70%)] shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--coin-ring-dark)_55%,transparent),inset_0_-3px_6px_rgba(0,0,0,0.4),0_4px_12px_-4px_rgba(0,0,0,0.5)] [backface-visibility:hidden]">
+          <Moon className="size-[18px]" style={{ color: "var(--coin-ring-dark)" }} strokeWidth={2.2} />
         </span>
         {/* face clara */}
-        <span className="absolute inset-0 grid place-items-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#ffffff,#f7edf3_70%)] shadow-[inset_0_0_0_2px_rgba(194,15,73,0.45),inset_0_-3px_6px_rgba(194,15,73,0.12),0_4px_12px_-4px_rgba(36,17,39,0.25)] [backface-visibility:hidden] [transform:rotateY(180deg)]">
-          <Sun className="size-[18px] text-crimson" strokeWidth={2.2} />
+        <span className="absolute inset-0 grid place-items-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#ffffff,var(--coin-light-lo)_70%)] shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--coin-ring-light)_45%,transparent),inset_0_-3px_6px_color-mix(in_oklab,var(--coin-ring-light)_12%,transparent),0_4px_12px_-4px_rgba(0,0,0,0.25)] [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <Sun className="size-[18px]" style={{ color: "var(--coin-ring-light)" }} strokeWidth={2.2} />
         </span>
       </motion.span>
     </button>

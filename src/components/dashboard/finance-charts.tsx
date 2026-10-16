@@ -346,8 +346,8 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                     <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="nexo-line" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#c20f49" />
-                    <stop offset="100%" stopColor="#f25c8d" />
+                    <stop offset="0%" stopColor="var(--brand-crimson)" />
+                    <stop offset="100%" stopColor="var(--brand-rose)" />
                   </linearGradient>
                 </defs>
                 {grid}

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { CoinToggle } from "@/components/brand/coin-toggle";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/cn";
+import type { PaletteId } from "@/lib/theme/palettes";
 import { useTheme } from "@/lib/theme/provider";
 import type { Theme } from "@/lib/theme/shared";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -21,24 +22,30 @@ function isActive(pathname: string, href: string) {
 export function AppShell({
   user,
   profileTheme,
+  profilePalette,
   signOutAction,
   quickEntry,
   children,
 }: {
   user: { name: string; email: string };
   profileTheme: Theme | null;
+  profilePalette?: PaletteId | null;
   signOutAction?: () => Promise<void>;
   quickEntry?: QuickEntryData;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, palette, setPalette } = useTheme();
 
   // o perfil é a fonte de verdade do tema (ex.: alterado em outro dispositivo)
   useEffect(() => {
     if (profileTheme && profileTheme !== theme) toggle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileTheme]);
+  useEffect(() => {
+    if (profilePalette && profilePalette !== palette) setPalette(profilePalette);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profilePalette]);
 
   const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => setMoreOpen(false), [pathname]);
