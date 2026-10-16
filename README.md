@@ -15,6 +15,10 @@
 </p>
 
 <p align="center">
+  <a href="https://nexo-gamma-one.vercel.app"><b>🔗 Acessar o app</b></a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/dashboard.webp" width="90%" alt="Visão geral do NEXO" />
 </p>
 
