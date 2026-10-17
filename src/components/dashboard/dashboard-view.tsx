@@ -1,14 +1,13 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard, Plus } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Panel, PanelHeader } from "@/components/ui/card";
 import { Money } from "@/components/money";
 import type { DashboardModel } from "@/domain/dashboard";
 import { formatDateBR } from "@/domain/dates";
-import { formatBRL } from "@/domain/money";
 import type { TimelineStatus } from "@/domain/timeline";
 import { cn } from "@/lib/cn";
-import { FinanceCharts } from "./finance-charts-lazy";
+import { ForecastPanel } from "./forecast-panel";
 import { BankCardFace } from "@/components/cards/bank-card-face";
 
 const HORIZONS = [
@@ -89,42 +88,8 @@ export function DashboardView({
       {demoNotice}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
-        {/* destaque: quanto posso gastar + linha do saldo */}
-        <Panel className="relative isolate overflow-hidden">
-          <div aria-hidden className="absolute -right-24 -top-40 -z-10 size-[30rem] rounded-full bg-[radial-gradient(closest-side,var(--glow-1),transparent)]" />
-          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-            <div>
-              <p className="flex items-center gap-2 text-sm text-ink-2"><span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />Livre para gastar até {formatDateBR(model.horizonEnd)}</p>
-              <p className={cn("mt-2 text-[2.875rem] font-semibold leading-none tracking-[-0.05em] sm:text-[3.75rem]", t.free < 0 ? "text-negative" : "text-hero")}>
-                <Money value={t.free} />
-              </p>
-              <p className="mt-3 max-w-md text-sm text-ink-3">
-                É o menor saldo previsto no período{t.reserve > 0 ? `, já descontada a reserva de ${formatBRL(t.reserve)}` : ""}. Gastar mais do que isso hoje deixaria algum dia no vermelho.
-              </p>
-            </div>
-            <div className="flex gap-3 text-sm">
-              <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
-                <p className="text-xs text-ink-3">Menor saldo · {short(t.lowestDate)}</p>
-                <p className="mt-0.5 font-semibold"><Money value={t.lowest} /></p>
-              </div>
-              <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
-                <p className="text-xs text-ink-3">Fim do período</p>
-                <p className="mt-0.5 font-semibold"><Money value={t.projected} /></p>
-              </div>
-            </div>
-          </div>
-
-          {t.firstNegativeDate && (
-            <p role="alert" className="mt-5 flex items-start gap-2 rounded-xl bg-accent-soft px-4 py-3 text-sm text-negative">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              O saldo previsto fica negativo em {formatDateBR(t.firstNegativeDate)}, mesmo que termine o período em <Money value={t.projected} />.
-            </p>
-          )}
-
-          <div className="chart-glow mt-6">
-            <FinanceCharts model={model} />
-          </div>
-        </Panel>
+        {/* destaque: quanto posso gastar + gráficos (com seletor de receitas previstas) */}
+        <ForecastPanel model={model} />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-6">
           <Panel>

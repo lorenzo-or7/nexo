@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
  * Fluxos com login (persistência após logout/login com Supabase real) ficam em
  * e2e/auth.spec.ts e exigem E2E_EMAIL/E2E_PASSWORD de um projeto de teste.
  */
-const PAGES = ["/entrar", "/cadastro", "/recuperar-senha", "/dev/preview", "/dev/preview?h=90", "/dev/preview/contas", "/dev/preview/lancamentos", "/dev/preview/lancamentos?tipo=pending"];
+const PAGES = ["/entrar", "/cadastro", "/recuperar-senha", "/dev/preview", "/dev/preview?h=90", "/dev/preview/contas", "/dev/preview/contas-fixas", "/dev/preview/lancamentos", "/dev/preview/lancamentos?tipo=pending"];
 
 for (const path of PAGES) {
   test(`[16] sem rolagem horizontal em ${path}`, async ({ page }) => {

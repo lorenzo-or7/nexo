@@ -12,13 +12,10 @@ import type { PaletteId } from "@/lib/theme/palettes";
 import { useTheme } from "@/lib/theme/provider";
 import type { Theme } from "@/lib/theme/shared";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { NAV } from "./nav";
+import { NAV, isActive } from "./nav";
 import { QuickEntryButton } from "@/components/entries/entry-dialog";
 import type { QuickEntryData } from "@/lib/data/ledger";
 
-function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
-}
 
 export function AppShell({
   user,

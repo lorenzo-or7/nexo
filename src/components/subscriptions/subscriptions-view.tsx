@@ -12,11 +12,55 @@ import { cn } from "@/lib/cn";
 import { CancelSubscriptionButton, RemoveSubscriptionButton, StatusButton, SubscriptionEditor, type SubscriptionItem } from "./subscription-dialogs";
 
 type Tab = "active" | "paused" | "cancelled";
-const TABS: { key: Tab; label: string }[] = [
-  { key: "active", label: "Ativas" },
-  { key: "paused", label: "Pausadas" },
-  { key: "cancelled", label: "Canceladas" },
-];
+type Variant = "subscription" | "bill";
+
+/** Mesma tela para assinaturas e contas fixas; só mudam as palavras. */
+const COPY: Record<
+  Variant,
+  {
+    title: string;
+    subtitle: string;
+    newLabel: string;
+    emptyTitle: string;
+    emptyText: string;
+    cancelled: string;
+    soon: string;
+    next: string;
+    cancelledOn: string;
+    perMonth: string;
+    entries: [string, string];
+    none: string;
+  }
+> = {
+  subscription: {
+    title: "Assinaturas",
+    subtitle: "Tudo o que renova sozinho, num lugar só.",
+    newLabel: "Nova assinatura",
+    emptyTitle: "Nenhuma assinatura ainda",
+    emptyText: "Streaming, música, apps, academia: cadastre uma vez e o NEXO lança cada cobrança e prevê as próximas no seu saldo.",
+    cancelled: "Canceladas",
+    soon: "Renova em breve: ",
+    next: "Próxima cobrança",
+    cancelledOn: "Cancelada em",
+    perMonth: "Custo por mês",
+    entries: ["cobrança", "cobranças"],
+    none: "Nenhuma cobrança lançada ainda",
+  },
+  bill: {
+    title: "Contas fixas",
+    subtitle: "O que você paga todo mês, com dia certo: luz, condomínio, academia, internet.",
+    newLabel: "Nova conta fixa",
+    emptyTitle: "Nenhuma conta fixa ainda",
+    emptyText: "Luz, água, condomínio, academia, internet: cadastre uma vez e o NEXO lança o valor todo mês e já desconta os próximos vencimentos do seu saldo previsto.",
+    cancelled: "Encerradas",
+    soon: "Vence em breve: ",
+    next: "Próximo vencimento",
+    cancelledOn: "Encerrada em",
+    perMonth: "Total por mês",
+    entries: ["lançamento", "lançamentos"],
+    none: "Nenhum lançamento feito ainda",
+  },
+};
 
 function when(days: number | null): string {
   if (days === null) return "";
@@ -31,37 +75,45 @@ export function SubscriptionsView({
   totals,
   next30,
   openNew,
+  variant = "subscription",
 }: {
   items: SubscriptionItem[];
   data: QuickEntryData;
   totals: { monthly: Cents; yearly: Cents; activeCount: number };
   next30: { total: Cents; count: number };
   openNew?: boolean;
+  variant?: Variant;
 }) {
+  const t = COPY[variant];
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "active", label: "Ativas" },
+    { key: "paused", label: "Pausadas" },
+    { key: "cancelled", label: t.cancelled },
+  ];
   const [tab, setTab] = useState<Tab>("active");
   const [editing, setEditing] = useState<SubscriptionItem | "new" | null>(openNew ? "new" : null);
   const shown = items
     .filter((i) => i.status === tab)
     .sort((a, b) => (a.nextDate ?? "9999").localeCompare(b.nextDate ?? "9999") || a.name.localeCompare(b.name));
-  const count = (t: Tab) => items.filter((i) => i.status === t).length;
+  const count = (k: Tab) => items.filter((i) => i.status === k).length;
   const soon = items.filter((i) => i.status === "active" && i.daysToNext !== null && i.daysToNext <= i.alertDays);
   const newButton = (
     <Button onClick={() => setEditing("new")}>
       <Plus />
-      Nova assinatura
+      {t.newLabel}
     </Button>
   );
 
   return (
     <>
-      <PageHeader title="Assinaturas" subtitle="Tudo o que renova sozinho, num lugar só." actions={newButton} />
+      <PageHeader title={t.title} subtitle={t.subtitle} actions={newButton} />
 
       {items.length === 0 ? (
         <Panel className="grid max-w-xl justify-items-start gap-4">
           <span className="grid size-12 place-items-center rounded-2xl bg-accent-soft text-accent"><Repeat className="size-6" /></span>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Nenhuma assinatura ainda</h2>
-            <p className="mt-1 text-ink-2">Streaming, música, apps, academia: cadastre uma vez e o NEXO lança cada cobrança e prevê as próximas no seu saldo.</p>
+            <h2 className="text-xl font-semibold tracking-tight">{t.emptyTitle}</h2>
+            <p className="mt-1 text-ink-2">{t.emptyText}</p>
           </div>
           {newButton}
         </Panel>
@@ -69,7 +121,7 @@ export function SubscriptionsView({
         <>
           <Panel className="mb-6 grid grid-cols-2 gap-5 sm:grid-cols-3 sm:gap-6" data-testid="subs-summary">
             <div className="col-span-2 sm:col-span-1">
-              <p className="text-sm text-ink-2">Custo por mês</p>
+              <p className="text-sm text-ink-2">{t.perMonth}</p>
               <p className="text-hero mt-1 text-[2.25rem] font-semibold leading-none tracking-[-0.04em]"><Money value={totals.monthly} /></p>
               <p className="mt-1.5 text-sm text-ink-3">{totals.activeCount} ativa{totals.activeCount === 1 ? "" : "s"} · anuais e trimestrais divididas por mês</p>
             </div>
@@ -80,7 +132,7 @@ export function SubscriptionsView({
             <div>
               <p className="text-sm text-ink-2">Próximos 30 dias</p>
               <p className="mt-1 text-xl font-semibold"><Money value={next30.total} /></p>
-              <p className="mt-1.5 text-sm text-ink-3">{next30.count} cobrança{next30.count === 1 ? "" : "s"}</p>
+              <p className="mt-1.5 text-sm text-ink-3">{next30.count} {next30.count === 1 ? t.entries[0] : t.entries[1]}</p>
             </div>
           </Panel>
 
@@ -88,7 +140,7 @@ export function SubscriptionsView({
             <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[color-mix(in_oklab,var(--warning)_35%,transparent)] bg-warning-soft px-4 py-3 text-sm">
               <BellRing className="mt-0.5 size-4 shrink-0 text-warning" />
               <p>
-                <span className="font-medium">Renova em breve: </span>
+                <span className="font-medium">{t.soon}</span>
                 {soon.map((s, i) => (
                   <span key={s.id}>
                     {i > 0 && ", "}
@@ -100,17 +152,17 @@ export function SubscriptionsView({
           )}
 
           <div role="tablist" aria-label="Situação" className="panel-quiet mb-6 inline-flex gap-1 rounded-full p-1">
-            {TABS.map((t) => (
+            {TABS.map((x) => (
               <button
-                key={t.key}
+                key={x.key}
                 role="tab"
                 type="button"
-                aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
-                className={cn("h-9 rounded-full px-4 text-sm font-medium transition-colors", tab === t.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
+                aria-selected={tab === x.key}
+                onClick={() => setTab(x.key)}
+                className={cn("h-9 rounded-full px-4 text-sm font-medium transition-colors", tab === x.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
               >
-                {t.label}
-                <span className={cn("ml-1.5 tabular text-xs", tab === t.key ? "opacity-80" : "text-ink-3")}>{count(t.key)}</span>
+                {x.label}
+                <span className={cn("ml-1.5 tabular text-xs", tab === x.key ? "opacity-80" : "text-ink-3")}>{count(x.key)}</span>
               </button>
             ))}
           </div>
@@ -139,7 +191,7 @@ export function SubscriptionsView({
 
                     <dl className="relative grid grid-cols-2 gap-3 text-sm">
                       <div className="min-w-0">
-                        <dt className="flex items-center gap-1.5 text-ink-3"><CalendarClock className="size-3.5" />{s.status === "active" ? "Próxima cobrança" : s.status === "paused" ? "Pausada desde" : "Cancelada em"}</dt>
+                        <dt className="flex items-center gap-1.5 text-ink-3"><CalendarClock className="size-3.5" />{s.status === "active" ? t.next : s.status === "paused" ? "Pausada desde" : t.cancelledOn}</dt>
                         <dd className="mt-0.5 font-medium">
                           {s.status === "active" && s.nextDate ? (
                             <>
@@ -166,7 +218,7 @@ export function SubscriptionsView({
 
                     <div className="relative mt-auto flex items-center justify-between gap-2 border-t border-border pt-3">
                       <p className="min-w-0 truncate text-xs text-ink-3">
-                        {s.chargesCount === 0 ? "Nenhuma cobrança lançada ainda" : `${s.chargesCount} cobrança${s.chargesCount > 1 ? "s" : ""} · ${formatBRL(s.totalPaid)} no total`}
+                        {s.chargesCount === 0 ? t.none : `${s.chargesCount} ${s.chargesCount > 1 ? t.entries[1] : t.entries[0]} · ${formatBRL(s.totalPaid)} no total`}
                       </p>
                       <div className="flex shrink-0 items-center">
                         {s.status !== "cancelled" && (
@@ -194,6 +246,7 @@ export function SubscriptionsView({
         item={editing && editing !== "new" ? editing : undefined}
         data={data}
         open={editing !== null}
+        kind={variant}
         onOpenChange={(o) => !o && setEditing(null)}
       />
     </>

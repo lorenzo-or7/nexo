@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CreditCard, HandCoins, LayoutDashboard, Repeat, Settings, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, CreditCard, HandCoins, LayoutDashboard, Receipt, Repeat, Settings, Tags, Wallet, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -16,7 +16,13 @@ export const NAV: NavItem[] = [
   { href: "/contas", label: "Contas", short: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", short: "Cartões", icon: CreditCard },
   { href: "/assinaturas", label: "Assinaturas", short: "Assinaturas", icon: Repeat },
+  { href: "/contas-fixas", label: "Contas fixas", short: "Fixas", icon: Receipt, more: true },
   { href: "/renda-fixa", label: "Renda fixa", short: "Renda fixa", icon: HandCoins, more: true },
   { href: "/categorias", label: "Categorias", short: "Categorias", icon: Tags, more: true },
   { href: "/configuracoes", label: "Configurações", short: "Ajustes", icon: Settings, more: true },
 ];
+
+/** Item do menu aceso para a rota atual. Compara o segmento inteiro: "/contas" não acende em "/contas-fixas". */
+export function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}

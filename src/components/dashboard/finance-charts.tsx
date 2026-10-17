@@ -1,6 +1,7 @@
 "use client";
 import { BarChart3, ChartArea, ChartLine, ChartPie, Eye, EyeOff, Table2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { Segmented, usePref } from "./segmented";
 import {
   Area,
   Bar,
@@ -24,8 +25,8 @@ import { formatDateBR } from "@/domain/dates";
 import { formatBRL, type Cents } from "@/domain/money";
 import { cn } from "@/lib/cn";
 
-type View = "saldo" | "fluxo" | "categorias";
-type SaldoStyle = "area" | "line" | "bars";
+type View = "saldo" | "fluxo" | "categorias" | "receber" | "pagar";
+type SaldoStyle = "area" | "bars";
 type FluxoStyle = "grouped" | "stacked" | "lines";
 type CatStyle = "donut" | "bars";
 
@@ -35,6 +36,10 @@ const C = {
   expense: "var(--chart-expense)",
   balance: "var(--accent)",
   muted: "var(--ink-3)",
+  positive: "var(--positive)",
+  negative: "var(--negative)",
+  /** contas fixas e assinaturas */
+  recurring: "var(--warning)",
 };
 
 /** acima de tudo (inclusive do texto no centro da rosca) e opaco */
@@ -45,58 +50,23 @@ const short = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const compact = (v: number) =>
   Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : Math.round(v).toLocaleString("pt-BR");
 
-/** Lê/grava uma preferência de tela; o armazenamento do navegador pode falhar, então tudo é protegido. */
-function usePref<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (v: T) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const v = window.localStorage.getItem(`nexo:${key}`);
-      return v && (allowed as readonly string[]).includes(v) ? (v as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  const set = (v: T) => {
-    setValue(v);
-    try {
-      window.localStorage.setItem(`nexo:${key}`, v);
-    } catch {
-      /* sem armazenamento: só não lembra a escolha */
-    }
-  };
-  return [value, set];
-}
-
-function Segmented<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { key: T; label: string; icon?: ReactNode }[];
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-full border border-border bg-field/60 p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          role="radio"
-          aria-checked={value === o.key}
-          onClick={() => onChange(o.key)}
-          className={cn(
-            "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm transition-colors",
-            value === o.key ? "btn-primary" : "text-ink-2 hover:text-ink",
-          )}
-        >
-          {o.icon}
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+/**
+ * Escala "redonda" que sempre inclui o zero como um dos marcadores do eixo,
+ * para a linha fixa do zero cair exatamente em cima do "0".
+ */
+function niceScale(lo: number, hi: number, target = 5) {
+  const min = Math.min(lo, 0);
+  const max = Math.max(hi, 0);
+  const span = max - min || 1;
+  const raw = span / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const start = Math.floor(min / step + 1e-9) * step;
+  const end = Math.ceil(max / step - 1e-9) * step;
+  const ticks: number[] = [];
+  for (let v = start; v <= end + step / 2; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { ticks, domain: [ticks[0], ticks[ticks.length - 1]] as [number, number] };
 }
 
 function Swatch({ color, hatched, line }: { color: string; hatched?: boolean; line?: boolean }) {
@@ -136,36 +106,79 @@ function TipRow({ color, label, value, hatched, line }: { color: string; label: 
   );
 }
 
+interface Bucket {
+  key: string;
+  title: string;
+  label: string;
+  incomeConfirmed: number;
+  incomeExpected: number;
+  expenses: number;
+  outInvoices: number;
+  outRecurring: number;
+  outOther: number;
+  balanceAll: number;
+  balanceConfirmed: number;
+  /** soma do período inteiro até aqui (para as visões "A receber" e "A pagar") */
+  cumIncomeConfirmed: number;
+  cumIncomeExpected: number;
+  cumExpenses: number;
+}
+
 /** Agrupa por semana quando o período é longo (60/90 dias): barras diárias ficariam finas demais. */
 function bucketize(days: ChartDay[]) {
   const weekly = days.length > 14;
   const size = weekly ? 7 : 1;
-  const out: { key: string; title: string; label: string; incomeConfirmed: number; incomeExpected: number; expenses: number; balanceAll: number; balanceConfirmed: number }[] = [];
+  const out: Bucket[] = [];
+  let cc = 0;
+  let ce = 0;
+  let cx = 0;
   for (let i = 0; i < days.length; i += size) {
     const chunk = days.slice(i, i + size);
     const first = chunk[0];
     const last = chunk[chunk.length - 1];
-    out.push({
+    const total = (f: (d: ChartDay) => number) => chunk.reduce((t, d) => t + f(d), 0);
+    const b: Bucket = {
       key: first.date,
       title: weekly ? `${formatDateBR(first.date)} a ${formatDateBR(last.date)}` : formatDateBR(first.date),
       label: short(first.date),
-      incomeConfirmed: chunk.reduce((t, d) => t + d.incomeConfirmed, 0),
-      incomeExpected: chunk.reduce((t, d) => t + d.incomeExpected, 0),
-      expenses: chunk.reduce((t, d) => t + d.expenses, 0),
+      incomeConfirmed: total((d) => d.incomeConfirmed),
+      incomeExpected: total((d) => d.incomeExpected),
+      expenses: total((d) => d.expenses),
+      outInvoices: total((d) => d.outInvoices),
+      outRecurring: total((d) => d.outRecurring),
+      outOther: total((d) => d.outOther),
       balanceAll: last.balanceAll,
       balanceConfirmed: last.balanceConfirmed,
-    });
+      cumIncomeConfirmed: 0,
+      cumIncomeExpected: 0,
+      cumExpenses: 0,
+    };
+    cc += b.incomeConfirmed;
+    ce += b.incomeExpected;
+    cx += b.expenses;
+    b.cumIncomeConfirmed = cc;
+    b.cumIncomeExpected = ce;
+    b.cumExpenses = cx;
+    out.push(b);
   }
   return { rows: out, weekly };
 }
 
-export function FinanceCharts({ model }: { model: DashboardModel }) {
+export function FinanceCharts({
+  model,
+  showExpected,
+  onShowExpectedChange,
+}: {
+  model: DashboardModel;
+  /** compartilhado com o destaque da tela: o saldo conta as receitas previstas? */
+  showExpected: boolean;
+  onShowExpectedChange: (v: boolean) => void;
+}) {
   const { chart, byCategory } = model;
-  const [view, setView] = usePref<View>("chart-view", "saldo", ["saldo", "fluxo", "categorias"]);
-  const [saldoStyle, setSaldoStyle] = usePref<SaldoStyle>("chart-saldo", "area", ["area", "line", "bars"]);
+  const [view, setView] = usePref<View>("chart-view", "saldo", ["saldo", "fluxo", "categorias", "receber", "pagar"]);
+  const [saldoStyle, setSaldoStyle] = usePref<SaldoStyle>("chart-saldo", "area", ["area", "bars"]);
   const [fluxoStyle, setFluxoStyle] = usePref<FluxoStyle>("chart-fluxo", "grouped", ["grouped", "stacked", "lines"]);
   const [catStyle, setCatStyle] = usePref<CatStyle>("chart-cat", "donut", ["donut", "bars"]);
-  const [showExpected, setShowExpected] = useState(chart.defaultShowExpected || chart.expectedIncome.length > 0);
   const [showIncome, setShowIncome] = useState(true);
   const [showExpenses, setShowExpenses] = useState(true);
   const [table, setTable] = useState(false);
@@ -189,6 +202,37 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
     return rows;
   }, [chart.days, showExpected]);
   const minBalance = Math.min(0, ...saldoData.map((d) => d.main));
+  const maxBalance = Math.max(0, ...saldoData.map((d) => d.main));
+  /** escala e zonas consideram tudo o que está desenhado, inclusive a linha tracejada do confirmado */
+  const showConfirmedLine = showExpected && hasExpected;
+  const visValues = saldoData.flatMap((d) => (showConfirmedLine ? [d.main, d.balanceConfirmed] : [d.main]));
+  const visMin = Math.min(0, ...visValues);
+  const visMax = Math.max(0, ...visValues);
+  const saldoScale = niceScale(visMin, visMax);
+  /** onde o zero cai na altura do desenho (0 = topo, 1 = base): só existe quando o saldo cruza o zero */
+  const zeroSplit = maxBalance > 0 && minBalance < 0 ? maxBalance / (maxBalance - minBalance) : null;
+
+  /** "A receber": soma acumulada dia a dia, separando o confirmado do apenas previsto */
+  const receberData = useMemo(() => {
+    let c = 0;
+    let e = 0;
+    return chart.days.map((d) => {
+      c += d.incomeConfirmed;
+      e += d.incomeExpected;
+      return { date: d.date, title: formatDateBR(d.date), cumConfirmed: c, cumExpected: e, cumTotal: c + e, incomeConfirmed: d.incomeConfirmed, incomeExpected: d.incomeExpected, items: d.items.filter((i) => i.amount > 0) };
+    });
+  }, [chart.days]);
+  const receberTotal = receberData.at(-1) ?? { cumConfirmed: 0, cumExpected: 0, cumTotal: 0 };
+  const nextReceipt = receberData.find((d) => d.incomeConfirmed + d.incomeExpected > 0);
+  const pagarTotals = useMemo(
+    () => ({
+      invoices: buckets.rows.reduce((t, b) => t + b.outInvoices, 0),
+      recurring: buckets.rows.reduce((t, b) => t + b.outRecurring, 0),
+      other: buckets.rows.reduce((t, b) => t + b.outOther, 0),
+      total: buckets.rows.reduce((t, b) => t + b.expenses, 0),
+    }),
+    [buckets.rows],
+  );
 
   const catTotal = byCategory.reduce((t, c) => t + c.amount, 0);
   const catRows = useMemo(() => {
@@ -214,13 +258,17 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
       ? `Saldo projetado de ${formatDateBR(chart.days[0].date)} a ${formatDateBR(chart.days.at(-1)!.date)}`
       : view === "fluxo"
         ? `Receitas e saídas ${buckets.weekly ? "por semana" : "por dia"} de ${formatDateBR(chart.days[0].date)} a ${formatDateBR(chart.days.at(-1)!.date)}`
-        : "Despesas do mês por categoria";
+        : view === "receber"
+          ? `Total a receber acumulado de ${formatDateBR(chart.days[0].date)} a ${formatDateBR(chart.days.at(-1)!.date)}`
+          : view === "pagar"
+            ? `Saídas ${buckets.weekly ? "por semana" : "por dia"} de ${formatDateBR(chart.days[0].date)} a ${formatDateBR(chart.days.at(-1)!.date)}, por origem`
+            : "Despesas do mês por categoria";
 
   const expectedToggle = (
     <button
       type="button"
       aria-pressed={showExpected}
-      onClick={() => setShowExpected(!showExpected)}
+      onClick={() => onShowExpectedChange(!showExpected)}
       disabled={!hasExpected}
       title={hasExpected ? undefined : "Nenhuma receita prevista no período"}
       className={cn(
@@ -243,8 +291,10 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
           onChange={(v) => { setView(v); setTable(false); }}
           options={[
             { key: "saldo", label: "Saldo" },
-            { key: "fluxo", label: "Entradas e saídas" },
+            { key: "fluxo", label: "Entradas e saídas", short: "Fluxo" },
             { key: "categorias", label: "Categorias" },
+            { key: "receber", label: "A receber" },
+            { key: "pagar", label: "A pagar" },
           ]}
         />
         {view === "saldo" && (
@@ -254,7 +304,6 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
             onChange={setSaldoStyle}
             options={[
               { key: "area", label: "Área", icon: <ChartArea className="size-4" /> },
-              { key: "line", label: "Linha", icon: <ChartLine className="size-4" /> },
               { key: "bars", label: "Barras", icon: <BarChart3 className="size-4" /> },
             ]}
           />
@@ -283,7 +332,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
           />
         )}
         <div className="ml-auto flex items-center gap-2">
-          {view !== "categorias" && expectedToggle}
+          {(view === "saldo" || view === "fluxo") && expectedToggle}
           <button
             type="button"
             aria-pressed={table}
@@ -301,6 +350,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
         {view === "saldo" && (
           <>
             <li className="flex items-center gap-2"><Swatch color={C.balance} />{showExpected && hasExpected ? "Saldo com previstas" : "Saldo previsto"}</li>
+            <li className="flex items-center gap-2"><span aria-hidden className="inline-block h-0 w-4 border-t-2 border-solid" style={{ borderColor: "var(--ink-2)" }} />Linha do zero: acima positivo, abaixo negativo</li>
             <li className="flex items-center gap-2"><span aria-hidden className="size-3 rounded-full border-2" style={{ borderColor: minBalance < 0 ? "var(--negative)" : "var(--warning)" }} />Menor saldo</li>
             {showExpected && hasExpected && (
               <>
@@ -318,7 +368,7 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
               </button>
             </li>
             <li>
-              <button type="button" aria-pressed={showExpected} onClick={() => hasExpected && setShowExpected(!showExpected)} className={cn("flex items-center gap-2 transition-opacity", (!showExpected || !hasExpected) && "opacity-40")}>
+              <button type="button" aria-pressed={showExpected} onClick={() => hasExpected && onShowExpectedChange(!showExpected)} className={cn("flex items-center gap-2 transition-opacity", (!showExpected || !hasExpected) && "opacity-40")}>
                 <Swatch color={C.expected} hatched />Receitas previstas
               </button>
             </li>
@@ -330,11 +380,25 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
           </>
         )}
         {view === "categorias" && <li className="text-ink-3">Consumo pela data da compra; pagamento de fatura não conta de novo.</li>}
+        {view === "receber" && (
+          <>
+            <li className="flex items-center gap-2"><Swatch color={C.income} />Confirmado a receber</li>
+            <li className="flex items-center gap-2"><Swatch color={C.expected} hatched />Previsto</li>
+            <li className="text-ink-3">Soma acumulada: cada degrau é um recebimento.</li>
+          </>
+        )}
+        {view === "pagar" && (
+          <>
+            <li className="flex items-center gap-2"><Swatch color={C.expense} />Faturas de cartão</li>
+            <li className="flex items-center gap-2"><Swatch color={C.recurring} />Contas fixas e assinaturas</li>
+            <li className="flex items-center gap-2"><Swatch color={C.muted} />Outras saídas</li>
+          </>
+        )}
       </ul>
 
       <div className="mt-3 min-w-0">
         {table ? (
-          <DataTable view={view} saldo={saldoData} buckets={buckets} cats={catRows} showExpected={showExpected && hasExpected} />
+          <DataTable view={view} saldo={saldoData} buckets={buckets} cats={catRows} receber={receberData} showExpected={showExpected && hasExpected} />
         ) : view === "saldo" ? (
           <div className="h-56 w-full sm:h-64" role="img" aria-label={description}>
             <ResponsiveContainer width="100%" height="100%">
@@ -349,12 +413,52 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                     <stop offset="0%" stopColor="var(--brand-crimson)" />
                     <stop offset="100%" stopColor="var(--brand-rose)" />
                   </linearGradient>
+                  {/* quando o saldo cruza o zero, acima e abaixo da linha ganham cores diferentes */}
+                  {zeroSplit !== null && (
+                    <>
+                      <linearGradient id="nexo-line-split" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset={0} stopColor="var(--accent)" />
+                        <stop offset={zeroSplit} stopColor="var(--accent)" />
+                        <stop offset={zeroSplit} stopColor="var(--negative)" />
+                        <stop offset={1} stopColor="var(--negative)" />
+                      </linearGradient>
+                      <linearGradient id="nexo-area-split" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset={0} stopColor="var(--accent)" stopOpacity={0.34} />
+                        <stop offset={zeroSplit} stopColor="var(--accent)" stopOpacity={0.06} />
+                        <stop offset={zeroSplit} stopColor="var(--negative)" stopOpacity={0.06} />
+                        <stop offset={1} stopColor="var(--negative)" stopOpacity={0.38} />
+                      </linearGradient>
+                    </>
+                  )}
                 </defs>
                 {grid}
                 <XAxis dataKey="date" tickFormatter={short} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
-                <YAxis width={56} domain={[minBalance < 0 ? "dataMin" : 0, "auto"]} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
-                {minBalance < 0 && <ReferenceArea y1={minBalance} y2={0} fill="var(--negative)" fillOpacity={0.09} ifOverflow="extendDomain" />}
-                {minBalance < 0 && <ReferenceLine y={0} stroke="var(--negative)" strokeDasharray="4 4" />}
+                <YAxis width={56} domain={saldoScale.domain} ticks={saldoScale.ticks} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
+                {/* zonas: acima do zero (saldo positivo) e abaixo (negativo) */}
+                {visMax > 0 && <ReferenceArea y1={0} y2={saldoScale.domain[1]} fill="var(--positive)" fillOpacity={0.05} ifOverflow="hidden" />}
+                {visMin < 0 && <ReferenceArea y1={saldoScale.domain[0]} y2={0} fill="var(--negative)" fillOpacity={0.1} ifOverflow="hidden" />}
+                {/* linha fixa do zero: sempre visível, em qualquer tema, com os lados nomeados */}
+                <ReferenceLine
+                  y={0}
+                  stroke="var(--ink-2)"
+                  strokeOpacity={0.8}
+                  strokeWidth={1.5}
+                  ifOverflow="visible"
+                  label={{
+                    content: (props) => {
+                      const vb = (props.viewBox ?? {}) as { x?: number; y?: number };
+                      const x = (vb.x ?? 0) + 6;
+                      const y = vb.y ?? 0;
+                      const t = { fontSize: 11, fontWeight: 600, stroke: "var(--surface)", strokeWidth: 3, paintOrder: "stroke" as const };
+                      return (
+                        <g aria-hidden>
+                          {visMax > 0 && <text x={x} y={y - 6} fill="var(--positive)" {...t}>▲ positivo</text>}
+                          {visMin < 0 && <text x={x} y={y + 15} fill="var(--negative)" {...t}>▼ negativo</text>}
+                        </g>
+                      );
+                    },
+                  }}
+                />
                 {reserve > 0 && <ReferenceLine y={reserve} stroke="var(--warning)" strokeDasharray="2 4" />}
                 <Tooltip
                   wrapperStyle={TIP_STYLE}
@@ -388,10 +492,19 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
                   )}
                 />
                 {saldoStyle === "area" && (
-                  <Area type="stepAfter" dataKey="main" name="Saldo" stroke="url(#nexo-line)" strokeWidth={2.5} fill="url(#nexo-area)" isAnimationActive animationDuration={600} activeDot={{ r: 5, fill: "#f25c8d", stroke: "var(--surface)", strokeWidth: 2 }} />
-                )}
-                {saldoStyle === "line" && (
-                  <Line type="stepAfter" dataKey="main" name="Saldo" stroke="url(#nexo-line)" strokeWidth={2.5} dot={false} isAnimationActive animationDuration={600} activeDot={{ r: 5, fill: "#f25c8d", stroke: "var(--surface)", strokeWidth: 2 }} />
+                  <Area
+                    type="stepAfter"
+                    dataKey="main"
+                    name="Saldo"
+                    baseValue={0}
+                    stroke={zeroSplit !== null ? "url(#nexo-line-split)" : minBalance < 0 && maxBalance <= 0 ? "var(--negative)" : "url(#nexo-line)"}
+                    strokeWidth={2.5}
+                    fill={zeroSplit !== null ? "url(#nexo-area-split)" : minBalance < 0 && maxBalance <= 0 ? "var(--negative)" : "url(#nexo-area)"}
+                    fillOpacity={zeroSplit === null && minBalance < 0 && maxBalance <= 0 ? 0.22 : 1}
+                    isAnimationActive
+                    animationDuration={600}
+                    activeDot={{ r: 5, fill: "#f25c8d", stroke: "var(--surface)", strokeWidth: 2 }}
+                  />
                 )}
                 {saldoStyle === "bars" && (
                   <Bar dataKey="main" name="Saldo" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive animationDuration={600}>
@@ -473,6 +586,92 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+        ) : view === "receber" ? (
+          <div className="h-56 w-full sm:h-64" role="img" aria-label={description}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={receberData} margin={margin}>
+                <defs>
+                  <pattern id="nexo-hatch-r" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <rect width="6" height="6" fill="var(--chart-expected)" fillOpacity={0.22} />
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="var(--chart-expected)" strokeWidth={3} />
+                  </pattern>
+                  <linearGradient id="nexo-income-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--chart-income)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="var(--chart-income)" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                {grid}
+                <XAxis dataKey="date" tickFormatter={short} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis width={56} domain={[0, "auto"]} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
+                <ReferenceLine y={0} stroke="var(--ink-2)" strokeOpacity={0.75} strokeWidth={1.5} />
+                <Tooltip
+                  wrapperStyle={TIP_STYLE}
+                  cursor={{ stroke: "var(--border-strong)" }}
+                  content={(p) => (
+                    <Tip
+                      p={p}
+                      render={(r) => (
+                        <>
+                          <TipRow color={C.income} label="Confirmado até aqui" value={brl(r.cumConfirmed as number)} />
+                          <TipRow color={C.expected} hatched label="Previsto até aqui" value={brl(r.cumExpected as number)} />
+                          <p className="mt-0.5 flex items-center justify-between gap-4 border-t border-border pt-1.5 font-medium text-ink">
+                            <span>Total a receber</span>
+                            <span className="tabular">{brl(r.cumTotal as number)}</span>
+                          </p>
+                          {(r.items as { label: string; amount: number }[]).length > 0 && (
+                            <ul className="mt-1.5 grid gap-0.5 border-t border-border pt-1.5 text-xs text-ink-3">
+                              {(r.items as { label: string; amount: number }[]).map((it, i) => (
+                                <li key={i} className="flex items-center justify-between gap-4">
+                                  <span className="max-w-40 truncate">{it.label}</span>
+                                  <span className="tabular" style={{ color: C.income }}>+{brl(it.amount)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      )}
+                    />
+                  )}
+                />
+                <Area type="stepAfter" dataKey="cumConfirmed" stackId="r" name="Confirmado" stroke={C.income} strokeWidth={2} fill="url(#nexo-income-area)" isAnimationActive={false} activeDot={false} />
+                <Area type="stepAfter" dataKey="cumExpected" stackId="r" name="Previsto" stroke={C.expected} strokeWidth={2} strokeDasharray="6 4" fill="url(#nexo-hatch-r)" isAnimationActive={false} activeDot={{ r: 5, fill: C.expected, stroke: "var(--surface)", strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        ) : view === "pagar" ? (
+          <div className="h-56 w-full sm:h-64" role="img" aria-label={description}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={buckets.rows} margin={margin} barCategoryGap="22%">
+                {grid}
+                <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={20} />
+                <YAxis width={56} domain={[0, "auto"]} tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
+                <ReferenceLine y={0} stroke="var(--ink-2)" strokeOpacity={0.75} strokeWidth={1.5} />
+                <Tooltip
+                  wrapperStyle={TIP_STYLE}
+                  cursor={{ fill: "var(--surface-2)", fillOpacity: 0.5 }}
+                  content={(p) => (
+                    <Tip
+                      p={p}
+                      render={(r) => (
+                        <>
+                          <TipRow color={C.expense} label="Faturas de cartão" value={brl(r.outInvoices as number)} />
+                          <TipRow color={C.recurring} label="Contas fixas e assinaturas" value={brl(r.outRecurring as number)} />
+                          <TipRow color={C.muted} label="Outras saídas" value={brl(r.outOther as number)} />
+                          <p className="mt-0.5 flex items-center justify-between gap-4 border-t border-border pt-1.5 text-ink-2">
+                            <span>Total a pagar até aqui</span>
+                            <span className="tabular font-medium text-ink">{brl(r.cumExpenses as number)}</span>
+                          </p>
+                        </>
+                      )}
+                    />
+                  )}
+                />
+                <Bar dataKey="outInvoices" name="Faturas de cartão" stackId="p" fill={C.expense} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="outRecurring" name="Contas fixas e assinaturas" stackId="p" fill={C.recurring} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="outOther" name="Outras saídas" stackId="p" fill={C.muted} radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         ) : catRows.length === 0 ? (
           <p className="grid h-40 place-items-center text-sm text-ink-3">Nenhuma despesa neste mês ainda.</p>
         ) : catStyle === "donut" ? (
@@ -538,8 +737,40 @@ export function FinanceCharts({ model }: { model: DashboardModel }) {
         </dl>
       )}
 
+      {view === "receber" && (
+        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total a receber", value: brl(receberTotal.cumTotal), color: C.income },
+            { label: "Confirmado", value: brl(receberTotal.cumConfirmed), color: C.income },
+            { label: "Previsto", value: brl(receberTotal.cumExpected), color: C.expected, hatched: true },
+            { label: nextReceipt ? `Próximo recebimento · ${short(nextReceipt.date)}` : "Próximo recebimento", value: nextReceipt ? brl(nextReceipt.incomeConfirmed + nextReceipt.incomeExpected) : "nenhum", color: C.muted },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl border border-border bg-field/50 px-3 py-2.5">
+              <dt className="flex items-center gap-2 text-xs text-ink-3"><Swatch color={k.color} hatched={k.hatched} />{k.label}</dt>
+              <dd className="tabular mt-1 text-base font-semibold">{k.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {view === "pagar" && (
+        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total a pagar", value: pagarTotals.total, color: C.negative },
+            { label: "Faturas de cartão", value: pagarTotals.invoices, color: C.expense },
+            { label: "Contas fixas e assinaturas", value: pagarTotals.recurring, color: C.recurring },
+            { label: "Outras saídas", value: pagarTotals.other, color: C.muted },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl border border-border bg-field/50 px-3 py-2.5">
+              <dt className="flex items-center gap-2 text-xs text-ink-3"><Swatch color={k.color} />{k.label}</dt>
+              <dd className="tabular mt-1 text-base font-semibold">{brl(k.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       {/* espaço próprio das receitas previstas */}
-      {view !== "categorias" && (
+      {(view === "saldo" || view === "fluxo" || view === "receber") && (
         <div className="mt-4 rounded-2xl border border-dashed border-[color-mix(in_oklab,var(--chart-expected)_55%,transparent)] bg-[color-mix(in_oklab,var(--chart-expected)_8%,transparent)] px-4 py-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <p className="flex items-center gap-2 text-sm font-medium"><Swatch color={C.expected} hatched />Receitas previstas no período</p>
@@ -607,9 +838,11 @@ function DataTable({
   saldo,
   buckets,
   cats,
+  receber,
   showExpected,
 }: {
   view: View;
+  receber: { date: string; incomeConfirmed: number; incomeExpected: number; cumTotal: number }[];
   saldo: { date: string; main: number; incomeConfirmed: number; incomeExpected: number; expenses: number; balanceConfirmed: number }[];
   buckets: ReturnType<typeof bucketize>;
   cats: { name: string; value: number; pct: number }[];
@@ -625,6 +858,10 @@ function DataTable({
             <tr><th className={th}>Dia</th><th className={th}>Saldo</th>{showExpected && <th className={th}>Só o confirmado</th>}<th className={th}>Entradas</th><th className={th}>Saídas</th></tr>
           ) : view === "fluxo" ? (
             <tr><th className={th}>{buckets.weekly ? "Semana" : "Dia"}</th><th className={th}>Receitas confirmadas</th><th className={th}>Receitas previstas</th><th className={th}>Saídas</th></tr>
+          ) : view === "receber" ? (
+            <tr><th className={th}>Dia</th><th className={th}>Confirmado</th><th className={th}>Previsto</th><th className={th}>Total a receber</th></tr>
+          ) : view === "pagar" ? (
+            <tr><th className={th}>{buckets.weekly ? "Semana" : "Dia"}</th><th className={th}>Faturas</th><th className={th}>Contas fixas e assinaturas</th><th className={th}>Outras</th><th className={th}>Total</th></tr>
           ) : (
             <tr><th className={th}>Categoria</th><th className={th}>Valor</th><th className={th}>%</th></tr>
           )}
@@ -646,6 +883,25 @@ function DataTable({
                 <td className={td}>{d.title}</td>
                 <td className={td}>{brl(d.incomeConfirmed)}</td>
                 <td className={td}>{brl(d.incomeExpected)}</td>
+                <td className={td}>{brl(d.expenses)}</td>
+              </tr>
+            ))}
+          {view === "receber" &&
+            receber.map((d) => (
+              <tr key={d.date} className="border-t border-border">
+                <td className={td}>{formatDateBR(d.date)}</td>
+                <td className={td}>{brl(d.incomeConfirmed)}</td>
+                <td className={td}>{brl(d.incomeExpected)}</td>
+                <td className={td}>{brl(d.cumTotal)}</td>
+              </tr>
+            ))}
+          {view === "pagar" &&
+            buckets.rows.map((d) => (
+              <tr key={d.key} className="border-t border-border">
+                <td className={td}>{d.title}</td>
+                <td className={td}>{brl(d.outInvoices)}</td>
+                <td className={td}>{brl(d.outRecurring)}</td>
+                <td className={td}>{brl(d.outOther)}</td>
                 <td className={td}>{brl(d.expenses)}</td>
               </tr>
             ))}

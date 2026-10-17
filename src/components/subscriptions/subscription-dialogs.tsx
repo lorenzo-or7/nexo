@@ -18,6 +18,8 @@ import { cn } from "@/lib/cn";
 
 export interface SubscriptionItem {
   id: string;
+  /** assinatura (streaming, apps) ou conta fixa (luz, condomínio, academia) */
+  kind: "subscription" | "bill";
   name: string;
   status: "active" | "paused" | "cancelled";
   price: Cents;
@@ -52,31 +54,42 @@ function useDone(state: SubscriptionActionResult, close: () => void) {
   }, [state]);
 }
 
+type Kind = SubscriptionItem["kind"];
+
 export function SubscriptionEditor({
   item,
   data,
   open,
   onOpenChange,
+  kind = "subscription",
 }: {
   item?: SubscriptionItem;
   data: QuickEntryData;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** o que está sendo cadastrado, quando é um item novo */
+  kind?: Kind;
 }) {
+  const k = item?.kind ?? kind;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        title={item ? `Editar ${item.name}` : "Nova assinatura"}
-        description="Cobranças que vencem viram lançamentos sozinhas; as próximas já entram na previsão do saldo."
+        title={item ? `Editar ${item.name}` : k === "bill" ? "Nova conta fixa" : "Nova assinatura"}
+        description={
+          k === "bill"
+            ? "O valor de cada mês vira lançamento sozinho no dia do vencimento; os próximos já entram na previsão do saldo."
+            : "Cobranças que vencem viram lançamentos sozinhas; as próximas já entram na previsão do saldo."
+        }
         className="[--dialog-w:560px]"
       >
-        {open && <SubscriptionForm item={item} data={data} onDone={() => onOpenChange(false)} />}
+        {open && <SubscriptionForm item={item} kind={k} data={data} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; data: QuickEntryData; onDone: () => void }) {
+function SubscriptionForm({ item, kind, data, onDone }: { item?: SubscriptionItem; kind: Kind; data: QuickEntryData; onDone: () => void }) {
+  const bill = kind === "bill";
   const [state, action, pending] = useActionState<SubscriptionActionResult, FormData>(saveSubscription, undefined);
   useDone(state, onDone);
   const errorFor = (f: string) => (state && !state.ok && state.field === f ? state.error : undefined);
@@ -88,8 +101,9 @@ function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; dat
   ];
   const defaultPay = item?.pay ?? payOptions[0]?.value ?? "";
 
-  // sugestão: a categoria "Assinaturas", se existir
-  const subsParent = data.categories.find((c) => !c.parentId && c.kind === "expense" && c.name.toLowerCase() === "assinaturas");
+  // sugestão: "Assinaturas" (ou, nas contas fixas, uma categoria de casa/contas), se existir
+  const suggested = bill ? ["contas fixas", "contas", "moradia", "casa"] : ["assinaturas"];
+  const subsParent = data.categories.find((c) => !c.parentId && c.kind === "expense" && suggested.includes(c.name.toLowerCase()));
   const catOptions: PickerOption[] = [{ value: "", label: "Sem categoria" }];
   for (const { parent, children } of categoryTree(data.categories, "expense")) {
     catOptions.push({ value: parent.id, label: `${parent.name} (geral)`, group: parent.name, color: categoryColor(parent, data.categories) });
@@ -99,7 +113,7 @@ function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; dat
   if (payOptions.length === 0) {
     return (
       <div className="grid gap-4 p-5 sm:p-6">
-        <p className="text-ink-2">Cadastre uma conta ou um cartão antes: a assinatura precisa saber de onde sai o dinheiro.</p>
+        <p className="text-ink-2">Cadastre uma conta ou um cartão antes: {bill ? "a conta fixa" : "a assinatura"} precisa saber de onde sai o dinheiro.</p>
         <div className="flex justify-end">
           <Button type="button" onClick={onDone}>Entendi</Button>
         </div>
@@ -110,11 +124,12 @@ function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; dat
   return (
     <form action={action} className="grid gap-5 p-5 sm:p-6">
       {item && <input type="hidden" name="id" value={item.id} />}
+      <input type="hidden" name="kind" value={kind} />
       {state && !state.ok && !state.field && <FormMessage tone="error">{state.error}</FormMessage>}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_11rem]">
         <Field label="Nome" htmlFor="sub-name" error={errorFor("name")}>
-          <Input id="sub-name" name="name" defaultValue={item?.name ?? ""} maxLength={60} required autoFocus placeholder="Ex.: Netflix, Spotify, ChatGPT" />
+          <Input id="sub-name" name="name" defaultValue={item?.name ?? ""} maxLength={60} required autoFocus placeholder={bill ? "Ex.: Academia, Luz, Condomínio" : "Ex.: Netflix, Spotify, ChatGPT"} />
         </Field>
         <Field label="Valor" htmlFor="sub-amount" error={errorFor("amount")}>
           <MoneyInput id="sub-amount" name="amount" defaultValue={item ? centsToInput(item.price) : ""} placeholder="0,00" />
@@ -125,7 +140,7 @@ function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; dat
         <Field label="Frequência" htmlFor="sub-preset" error={errorFor("preset")}>
           <Picker id="sub-preset" name="preset" defaultValue={item?.presetKey ?? "monthly"} options={FREQUENCY_PRESETS.map((p) => ({ value: p.key, label: p.label }))} />
         </Field>
-        <Field label={item ? "Próxima cobrança" : "Primeira cobrança"} htmlFor="sub-date" error={errorFor("next_date")}>
+        <Field label={bill ? (item ? "Próximo vencimento" : "Primeiro vencimento") : item ? "Próxima cobrança" : "Primeira cobrança"} htmlFor="sub-date" error={errorFor("next_date")}>
           <DatePicker id="sub-date" name="next_date" value={date} onValueChange={setDate} today={data.today} />
         </Field>
         <Field label="Pago com" htmlFor="sub-pay" error={errorFor("pay")}>
@@ -138,15 +153,22 @@ function SubscriptionForm({ item, data, onDone }: { item?: SubscriptionItem; dat
 
       <p className={cn("rounded-xl bg-surface-2 px-4 py-3 text-sm", !item && date < data.today ? "text-warning" : "text-ink-2")}>
         {item
-          ? `Um novo valor vale a partir de ${formatDateBR(date as LocalDate)}. Cobranças já lançadas não mudam.`
+          ? `Um novo valor vale a partir de ${formatDateBR(date as LocalDate)}. ${bill ? "Lançamentos" : "Cobranças"} já feitos não mudam.`
           : date < data.today
-            ? `Data no passado: as cobranças desde ${formatDateBR(date as LocalDate)} serão lançadas agora.`
-            : "No cartão, cada cobrança entra na fatura certa. Na conta, vira uma despesa no dia."}
+            ? `Data no passado: ${bill ? "os vencimentos" : "as cobranças"} desde ${formatDateBR(date as LocalDate)} serão lançados agora.`
+            : bill
+              ? "Em conta, vira uma despesa no dia do vencimento. No cartão, entra na fatura certa."
+              : "No cartão, cada cobrança entra na fatura certa. Na conta, vira uma despesa no dia."}
       </p>
+      {bill && (
+        <p className="-mt-2 text-sm text-ink-3">
+          O valor muda de mês em mês (luz, água)? Cadastre uma estimativa e, quando a conta chegar, edite o valor: ele passa a valer a partir da data escolhida.
+        </p>
+      )}
 
       <div className="flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onDone}>Cancelar</Button>
-        <Button type="submit" loading={pending}>{item ? "Salvar alterações" : "Criar assinatura"}</Button>
+        <Button type="submit" loading={pending}>{item ? "Salvar alterações" : bill ? "Criar conta fixa" : "Criar assinatura"}</Button>
       </div>
     </form>
   );
@@ -166,6 +188,7 @@ export function StatusButton({ item, action }: { item: SubscriptionItem; action:
   return (
     <form action={run}>
       <input type="hidden" name="id" value={item.id} />
+      <input type="hidden" name="kind" value={item.kind} />
       <input type="hidden" name="action" value={action} />
       <button type="submit" disabled={pending} aria-label={meta.label} title={meta.title} className={iconBtn}>
         <meta.icon className="size-4" />
@@ -181,22 +204,25 @@ export function CancelSubscriptionButton({ item }: { item: SubscriptionItem }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button type="button" aria-label={`Cancelar ${item.name}`} title="Cancelar" className={cn(iconBtn, "hover:bg-accent-soft hover:text-negative")}>
+        <button type="button" aria-label={`${item.kind === "bill" ? "Encerrar" : "Cancelar"} ${item.name}`} title={item.kind === "bill" ? "Encerrar" : "Cancelar"} className={cn(iconBtn, "hover:bg-accent-soft hover:text-negative")}>
           <XCircle className="size-4" />
         </button>
       </DialogTrigger>
-      <DialogContent title={`Cancelar ${item.name}?`} className="[--dialog-w:460px]">
+      <DialogContent title={`${item.kind === "bill" ? "Encerrar" : "Cancelar"} ${item.name}?`} className="[--dialog-w:460px]">
         <form action={run} className="grid gap-5 p-5 sm:p-6">
           <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="kind" value={item.kind} />
           <input type="hidden" name="action" value="cancel" />
           {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
           <p className="text-ink-2">
-            Para de gerar cobranças a partir de hoje e sai da previsão do saldo. O que já foi cobrado continua no histórico. Dá para reativar depois.
+            {item.kind === "bill"
+              ? "Para de gerar lançamentos a partir de hoje e sai da previsão do saldo. O que já foi lançado continua no histórico. Dá para reativar depois."
+              : "Para de gerar cobranças a partir de hoje e sai da previsão do saldo. O que já foi cobrado continua no histórico. Dá para reativar depois."}
           </p>
-          <p className="text-sm text-ink-3">Lembre-se de cancelar também no serviço — o NEXO só organiza o seu controle.</p>
+          {item.kind === "subscription" && <p className="text-sm text-ink-3">Lembre-se de cancelar também no serviço — o NEXO só organiza o seu controle.</p>}
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Voltar</Button>
-            <Button type="submit" variant="accent" loading={pending}>Cancelar assinatura</Button>
+            <Button type="submit" variant="accent" loading={pending}>{item.kind === "bill" ? "Encerrar conta fixa" : "Cancelar assinatura"}</Button>
           </div>
         </form>
       </DialogContent>
@@ -218,11 +244,16 @@ export function RemoveSubscriptionButton({ item }: { item: SubscriptionItem }) {
       <DialogContent title={`Excluir ${item.name}?`} className="[--dialog-w:460px]">
         <form action={run} className="grid gap-5 p-5 sm:p-6">
           <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="kind" value={item.kind} />
           {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
           <p className="text-ink-2">
-            {item.chargesCount > 0
-              ? "Ela já tem cobranças lançadas, então fica cancelada e o histórico é mantido."
-              : "Ainda não houve cobrança: ela é apagada de vez."}
+            {item.kind === "bill"
+              ? item.chargesCount > 0
+                ? "Ela já tem lançamentos feitos, então fica encerrada e o histórico é mantido."
+                : "Ainda não houve lançamento: ela é apagada de vez."
+              : item.chargesCount > 0
+                ? "Ela já tem cobranças lançadas, então fica cancelada e o histórico é mantido."
+                : "Ainda não houve cobrança: ela é apagada de vez."}
           </p>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Voltar</Button>

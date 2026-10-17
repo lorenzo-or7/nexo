@@ -44,6 +44,10 @@ export interface ChartDay {
   incomeConfirmed: number;
   incomeExpected: number;
   expenses: number;
+  /** saídas do dia por origem (somam `expenses`) */
+  outInvoices: number;
+  outRecurring: number;
+  outOther: number;
   /** o que acontece no dia (para o tooltip) */
   items: { label: string; amount: number }[];
 }
@@ -53,6 +57,17 @@ export interface ExpectedIncomeItem {
   label: string;
   amount: Cents;
   late: boolean;
+}
+
+/** Os números do destaque para um cenário (só o confirmado, ou contando as receitas previstas). */
+export interface ForecastScenario {
+  projected: Cents;
+  free: Cents;
+  lowest: Cents;
+  lowestDate: LocalDate;
+  firstNegativeDate: LocalDate | null;
+  /** quanto desse cenário vem de receitas apenas previstas (não confirmadas) */
+  expectedIncome: Cents;
 }
 
 export interface DashboardInput {
@@ -91,6 +106,8 @@ export interface DashboardModel {
   series: { date: LocalDate; balance: number }[];
   recent: { id: string; date: LocalDate; label: string; amount: Cents; kind: string }[];
   byCategory: { name: string; amount: Cents; color: string }[];
+  /** destaque nos dois cenários: o usuário alterna na tela */
+  scenarios: { confirmed: ForecastScenario; withExpected: ForecastScenario };
   /** dados dos gráficos (valores em reais, só para desenhar) */
   chart: { days: ChartDay[]; expectedIncome: ExpectedIncomeItem[]; defaultShowExpected: boolean };
 }
@@ -111,6 +128,11 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   const chartDays: ChartDay[] = withExpected.days.map((d, i) => {
     const isExpected = (e: { status: TimelineStatus }) => e.status === "expected" || e.status === "late";
     const pos = d.events.filter((e) => e.amount > 0 && e.status !== "realized");
+    const outs = d.events.filter((e) => e.amount < 0 && e.status !== "realized");
+    const outOf = (f: (e: (typeof outs)[number]) => boolean) => sum(outs.filter(f).map((e) => -e.amount)) / 100;
+    const isInvoice = (e: (typeof outs)[number]) => e.source === "invoice";
+    // contas fixas e assinaturas pagas em conta entram no extrato com este prefixo
+    const isRecurring = (e: (typeof outs)[number]) => e.source === "entry" && e.refId.startsWith("sub:");
     return {
       date: d.date,
       balanceAll: d.closing / 100,
@@ -118,6 +140,9 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
       incomeConfirmed: sum(pos.filter((e) => !isExpected(e)).map((e) => e.amount)) / 100,
       incomeExpected: sum(pos.filter(isExpected).map((e) => e.amount)) / 100,
       expenses: d.outflow / 100,
+      outInvoices: outOf(isInvoice),
+      outRecurring: outOf(isRecurring),
+      outOther: outOf((e) => !isInvoice(e) && !isRecurring(e)),
       items: d.events.filter((e) => e.status !== "realized").slice(0, 5).map((e) => ({ label: e.label, amount: e.amount / 100 })),
     };
   });
@@ -126,6 +151,11 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     .map((e) => ({ date: e.date, label: e.label, amount: e.amount, late: e.status === "late" }));
 
   const free = freeToSpend(timeline, { reserve: input.reserve, safetyMargin: input.safetyMargin });
+  const scenarioOf = (t: typeof timeline, expectedIncome: Cents): ForecastScenario => {
+    const f = freeToSpend(t, { reserve: input.reserve, safetyMargin: input.safetyMargin });
+    return { projected: t.endBalance, free: f.freeToSpend, lowest: t.minBalance, lowestDate: t.minBalanceDate, firstNegativeDate: t.firstNegativeDate, expectedIncome };
+  };
+  const expectedTotal = sum(expectedIncome.map((e) => e.amount)) as Cents;
 
   const accounts = input.accounts.map((a) => {
     const acc = base.accounts.find((x) => x.id === a.id)!;
@@ -216,6 +246,7 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount: amount as Cents, color: catColor.get(name)! })),
+    scenarios: { confirmed: scenarioOf(confirmedOnly, 0 as Cents), withExpected: scenarioOf(withExpected, expectedTotal) },
     chart: { days: chartDays, expectedIncome, defaultShowExpected: base.includeExpectedIncome },
   };
 }

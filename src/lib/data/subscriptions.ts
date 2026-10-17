@@ -13,8 +13,12 @@ import type { SubscriptionItem } from "@/components/subscriptions/subscription-d
 import type { QuickEntryData } from "./ledger";
 import type { Profile } from "./finance";
 
+/** 'subscription' = assinatura (streaming, apps); 'bill' = conta fixa mensal (luz, condomínio, academia). */
+export type RecurringKind = "subscription" | "bill";
+
 export interface SubscriptionRow {
   sub: Subscription;
+  kind: RecurringKind;
   payWith: "card" | "account";
   cardId: string | null;
   accountId: string | null;
@@ -34,15 +38,26 @@ function n(v: unknown): Cents {
 }
 
 /** Assinaturas com preços e cobranças já lançadas. Retorna null se a migration 11 ainda não foi aplicada. */
+const SUB_COLUMNS =
+  "id,name,category_id,frequency,interval_count,start_date,end_date,pay_with,card_id,account_id,status,paused_from,paused_until,cancelled_at,renewal_alert_days,color,charged_through";
+
+/** A coluna `kind` vem da migration das contas fixas; sem ela, tudo é assinatura (como sempre foi). */
+export async function kindColumnReady(supabase: SupabaseClient): Promise<boolean> {
+  const { error } = await supabase.from("subscriptions").select("kind").limit(1);
+  return !(error && error.code === "42703");
+}
+
 export async function loadSubscriptionRows(supabase: SupabaseClient): Promise<SubscriptionRow[] | null> {
-  const [subs, prices, charges] = await Promise.all([
-    supabase
-      .from("subscriptions")
-      .select("id,name,category_id,frequency,interval_count,start_date,end_date,pay_with,card_id,account_id,status,paused_from,paused_until,cancelled_at,renewal_alert_days,color,charged_through")
-      .order("created_at"),
+  const [first, prices, charges] = await Promise.all([
+    supabase.from("subscriptions").select(`${SUB_COLUMNS},kind`).order("created_at"),
     supabase.from("subscription_prices").select("subscription_id,effective_from,amount_cents"),
     supabase.from("subscription_charges").select("subscription_id,period_key,due_on,amount_cents").order("due_on"),
   ]);
+  let subs: { data: Record<string, any>[] | null; error: { code?: string; message: string } | null } = first; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // 42703 + "kind": a migration das contas fixas ainda não rodou; tenta de novo sem a coluna
+  if (subs.error?.code === "42703" && /kind/i.test(subs.error.message)) {
+    subs = await supabase.from("subscriptions").select(SUB_COLUMNS).order("created_at");
+  }
   if (subs.error) {
     // 42703 = coluna inexistente (charged_through): migration 11 pendente
     if (subs.error.code === "42703" || subs.error.code === "42P01") return null;
@@ -53,6 +68,7 @@ export async function loadSubscriptionRows(supabase: SupabaseClient): Promise<Su
   return (subs.data ?? []).map((s) => {
     const own = (charges.data ?? []).filter((c) => c.subscription_id === s.id);
     return {
+      kind: (s as { kind?: string }).kind === "bill" ? "bill" : "subscription",
       sub: {
         id: s.id,
         name: s.name,
@@ -181,6 +197,7 @@ export function buildSubscriptionItems(rows: SubscriptionRow[], data: QuickEntry
     const color = r.color ?? (cat ? categoryColor(cat, data.categories) : categoryColor({ id: s.id, name: s.name, parentId: null, kind: "expense" }, []));
     return {
       id: s.id,
+      kind: r.kind,
       name: s.name,
       status: s.status,
       price,

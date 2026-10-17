@@ -57,4 +57,45 @@ describe("dashboard derivado dos dados", () => {
     expect(food?.amount).toBe(4000);
     expect(food?.color).toBe("#2F9E44");
   });
+
+  it("destaque nos dois cenários: só o confirmado e com as receitas previstas", () => {
+    const d = buildDashboard(input());
+    const { confirmed, withExpected } = d.scenarios;
+    // com previstas: é o cenário "normal" da demonstração
+    expect(withExpected.projected).toBe(26323);
+    expect(withExpected.expectedIncome).toBe(81268 + 48899);
+    expect(withExpected.firstNegativeDate).toBeNull();
+    // só o confirmado: tira exatamente os recebimentos previstos e o saldo fica negativo
+    expect(confirmed.projected).toBe(26323 - (81268 + 48899));
+    expect(confirmed.expectedIncome).toBe(0);
+    expect(confirmed.firstNegativeDate).not.toBeNull();
+    expect(confirmed.free).toBeLessThan(withExpected.free);
+    // o menor saldo nunca passa do saldo do último dia no cenário com previstas (nada entra depois)
+    expect(withExpected.lowest).toBeLessThanOrEqual(withExpected.projected);
+  });
+
+  it("reserva e margem de segurança descontam nos dois cenários", () => {
+    const base = buildDashboard(input());
+    const withReserve = buildDashboard({ ...input(), reserve: 10000 as Cents, safetyMargin: 5000 as Cents });
+    expect(withReserve.scenarios.withExpected.free).toBe(base.scenarios.withExpected.free - 15000);
+    expect(withReserve.scenarios.confirmed.free).toBe(base.scenarios.confirmed.free - 15000);
+  });
+
+  it("separa as saídas do dia por origem (faturas, contas fixas e assinaturas, outras)", () => {
+    const i = input();
+    const today = i.base.today;
+    i.base.entries = [
+      ...i.base.entries,
+      // conta fixa/assinatura paga em conta: o id segue o padrão sub:<id>:<período>
+      { id: `sub:abc:${today.slice(0, 7)}`, accountId: i.base.accounts[0].id, date: today.slice(0, 8) + "28", amount: -21050 as Cents, kind: "expense", status: "scheduled", description: "Conta de luz", categoryId: null },
+      { id: "e-outra", accountId: i.base.accounts[0].id, date: today.slice(0, 8) + "29", amount: -5000 as Cents, kind: "expense", status: "scheduled", description: "Dentista", categoryId: null },
+    ];
+    const d = buildDashboard(i);
+    const sum = (f: (x: (typeof d.chart.days)[number]) => number) => d.chart.days.reduce((t, x) => t + f(x), 0);
+    expect(sum((x) => x.outRecurring)).toBeCloseTo(210.5);
+    expect(sum((x) => x.outOther)).toBeCloseTo(50);
+    expect(sum((x) => x.outInvoices)).toBeCloseTo(544.68 + 814.88);
+    // as três partes sempre somam o total de saídas do dia
+    for (const x of d.chart.days) expect(x.outInvoices + x.outRecurring + x.outOther).toBeCloseTo(x.expenses);
+  });
 });

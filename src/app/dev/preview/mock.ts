@@ -48,10 +48,36 @@ export const accounts: AccountListItem[] = [
 ];
 
 /** Assinaturas fictícias da prévia. */
+/** Contas fixas (luz, condomínio, academia...) — a mesma estrutura das assinaturas, com kind "bill". */
+export function billRows(): SubscriptionRow[] {
+  const acc = "00000000-0000-4000-8000-0000000000a1";
+  const bill = (id: string, name: string, amount: number, start: string, over: Partial<SubscriptionRow> = {}): SubscriptionRow => ({
+    kind: "bill",
+    sub: { id, name, rule: { frequency: "monthly", interval: 1, startDate: start }, prices: [{ effectiveFrom: start, amount: amount as Cents }], status: "active" },
+    payWith: "account",
+    cardId: null,
+    accountId: acc,
+    categoryId: null,
+    color: null,
+    renewalAlertDays: 3,
+    chargedThrough: "2026-10-09",
+    keys: new Set(),
+    charges: [],
+    ...over,
+  });
+  return [
+    bill("00000000-0000-4000-8000-0000000001b1", "Condomínio", 68000, "2026-09-10", { charges: [{ periodKey: "2026-09", dueOn: "2026-09-10", amount: 68000 as Cents }], keys: new Set(["2026-09"]) }),
+    bill("00000000-0000-4000-8000-0000000001b2", "Conta de luz", 21050, "2026-09-15", { charges: [{ periodKey: "2026-09", dueOn: "2026-09-15", amount: 21050 as Cents }], keys: new Set(["2026-09"]) }),
+    bill("00000000-0000-4000-8000-0000000001b3", "Academia", 9990, "2026-10-12", { payWith: "card", accountId: null, cardId: "00000000-0000-4000-8000-0000000000d1" }),
+    bill("00000000-0000-4000-8000-0000000001b4", "Internet", 12990, "2026-05-20", { sub: { id: "00000000-0000-4000-8000-0000000001b4", name: "Internet", rule: { frequency: "monthly", interval: 1, startDate: "2026-05-20" }, prices: [{ effectiveFrom: "2026-05-20", amount: 12990 as Cents }], status: "cancelled", cancelledAt: "2026-08-31" } }),
+  ];
+}
+
 export function subscriptionRows(): SubscriptionRow[] {
   const row = (id: string, name: string, amount: number, start: string, over: Partial<Omit<SubscriptionRow, "sub">> & { sub?: Partial<SubscriptionRow["sub"]> } = {}): SubscriptionRow => {
     const { sub, ...rest } = over;
     return {
+      kind: "subscription",
       sub: { id, name, rule: { frequency: "monthly", interval: 1, startDate: start }, prices: [{ effectiveFrom: start, amount: amount as Cents }], status: "active", ...sub },
       payWith: "card",
       cardId: "00000000-0000-4000-8000-0000000000d1",

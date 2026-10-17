@@ -25,6 +25,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       </Panel>
     );
   }
-  const model = buildSubscriptionItems(rows, data, todayIn(profile.timezone));
+  // as contas fixas têm tela própria (/contas-fixas), mas somam na previsão do saldo do mesmo jeito
+  const model = buildSubscriptionItems(rows.filter((r) => r.kind !== "bill"), data, todayIn(profile.timezone));
   return <SubscriptionsView {...model} data={data} openNew={sp.nova === "1"} />;
 }
