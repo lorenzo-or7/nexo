@@ -3,10 +3,11 @@ import { Money } from "@/components/money";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/card";
-import { formatDateBR, formatMonthBR } from "@/domain/dates";
+import { formatDateBR, formatMonthBR, type LocalDate } from "@/domain/dates";
 import type { CardListItem } from "@/lib/data/cards";
 import { BankCardFace } from "./bank-card-face";
 import { CardEditor } from "./card-editor";
+import { InvoiceList } from "./invoice-payments";
 import { RemoveCardButton } from "./remove-card";
 
 const STATUS: Record<string, string> = {
@@ -15,7 +16,7 @@ const STATUS: Record<string, string> = {
   overdue: "Fatura vencida",
 };
 
-export function CardsView({ cards, accounts, openNew }: { cards: CardListItem[]; accounts: { id: string; name: string }[]; openNew?: boolean }) {
+export function CardsView({ cards, accounts, openNew, today }: { cards: CardListItem[]; accounts: { id: string; name: string }[]; openNew?: boolean; today: LocalDate }) {
   const addButton = (
     <Button>
       <Plus />
@@ -74,6 +75,8 @@ export function CardsView({ cards, accounts, openNew }: { cards: CardListItem[];
                       <div><dt className="text-ink-3">Vence</dt><dd className="font-medium">dia {c.dueDay}</dd></div>
                       <div className="min-w-0"><dt className="text-ink-3">Paga com</dt><dd className="truncate font-medium">{c.paymentAccountName ?? "—"}</dd></div>
                     </dl>
+
+                    <InvoiceList cardId={c.id} cardName={c.name} invoices={c.invoices} accounts={accounts} defaultAccountId={c.paymentAccountId} today={today} />
 
                     <div className="-mx-1 flex flex-wrap gap-1">
                       <CardEditor

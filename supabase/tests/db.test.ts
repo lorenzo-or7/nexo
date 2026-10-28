@@ -198,6 +198,22 @@ describe("compras no crédito, faturas e estornos (banco)", () => {
     expect(expenses).toHaveLength(0);
   });
 
+  it("pagamentos parciais somam, repetir a mesma chave não duplica e o estorno é auditável e único", async () => {
+    const { acc, card } = await setupCard(ALICE);
+    const p1 = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
+    const again = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
+    expect(again.id).toBe(p1.id);
+    const p2 = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 60000, '2026-10-12', 'confirmed', 'k-2') as id`, [card, acc]));
+    expect(await balance(ALICE, acc)).toBe(0);
+    await expect(as(BOB, () => q(`select reverse_invoice_payment($1)`, [p2.id]))).rejects.toThrow(/não encontrado/);
+    const rev = await as(ALICE, () => one<{ r: { amount_cents: number } }>(`select reverse_invoice_payment($1) as r`, [p2.id]));
+    expect(rev.r.amount_cents).toBe(60000);
+    expect(await balance(ALICE, acc)).toBe(60000);
+    await expect(as(ALICE, () => q(`select reverse_invoice_payment($1)`, [p2.id]))).rejects.toThrow(/já estornado/);
+    const kept = await as(ALICE, () => one<{ deleted: boolean }>(`select deleted_at is not null as deleted from account_entries where id = $1`, [p2.id]));
+    expect(kept.deleted).toBe(true);
+  });
+
   it("parcelas que não somam o total são rejeitadas", async () => {
     const { card } = await setupCard(ALICE);
     await expect(as(ALICE, () => q(`select create_credit_purchase($1, 'X', null, '2026-10-05', 8500, $2::jsonb)`, [

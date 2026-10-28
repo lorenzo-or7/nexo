@@ -208,8 +208,9 @@ export interface InvoiceSummary {
 /**
  * Calcula todas as faturas de um cartão de `fromRef` a `toRef`.
  * Pagamentos só contam como confirmados. Pagamento a maior vira crédito na
- * fatura seguinte. Saldo não pago de fatura VENCIDA é levado à seguinte
- * (rotativo); juros entram como lançamento "fee" informado pelo usuário.
+ * fatura seguinte. Saldo não pago de fatura VENCIDA continua pendente na
+ * própria fatura (status "overdue"); juros entram como lançamento "fee"
+ * informado pelo usuário.
  */
 export function computeInvoices(
   c: CardBillingConfig,
@@ -273,6 +274,17 @@ export function computeInvoices(
   }
   if (range?.fromRef) return out.filter((i) => i.ref >= range.fromRef!);
   return out;
+}
+
+export type InvoiceLabel = "Aberta" | "Fechada" | "Parcialmente paga" | "Paga" | "Vencida" | "Crédito";
+
+/** Rótulo único para a tela. Vencida ≠ paga; parcialmente paga = pagou algo mas ainda falta. */
+export function invoiceLabel(i: Pick<InvoiceSummary, "status" | "paid" | "remaining">): InvoiceLabel {
+  if (i.status === "paid") return "Paga";
+  if (i.status === "credit") return "Crédito";
+  if (i.status === "overdue") return "Vencida";
+  if (i.paid > 0 && i.remaining > 0) return "Parcialmente paga";
+  return i.status === "open" ? "Aberta" : "Fechada";
 }
 
 export type LimitRule = "full_amount" | "billed_only";

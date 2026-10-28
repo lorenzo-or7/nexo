@@ -1,9 +1,11 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { todayIn } from "@/domain/dates";
 import { BANKS, CARD_BRANDS, bankByKey } from "@/domain/banks";
-import { parseBRL } from "@/domain/money";
-import { CARD_IMAGES_BUCKET } from "@/lib/data/cards";
+import { formatBRL, parseBRL, type Cents } from "@/domain/money";
+import { CARD_IMAGES_BUCKET, loadCards } from "@/lib/data/cards";
+import { loadProfile } from "@/lib/data/finance";
 import { requireUser } from "@/lib/supabase/server";
 
 export type CardActionResult =
@@ -154,4 +156,56 @@ export async function removeCard(_: CardActionResult, form: FormData): Promise<C
     ok: true,
     message: data === "deleted" ? "Cartão excluído." : "Cartão arquivado: ele tinha compras ou faturas, então o histórico foi mantido.",
   };
+}
+
+const paySchema = z.object({
+  card_id: z.uuid(),
+  invoice_ref: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Fatura inválida"),
+  account_id: z.uuid("Escolha a conta de onde sai o pagamento"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+  key: z.string().min(8).max(80),
+});
+
+/** Registra pagamento (total ou parcial) de uma fatura. Não é despesa de consumo: quita a obrigação. */
+export async function payInvoice(_: CardActionResult, form: FormData): Promise<CardActionResult> {
+  const parsed = paySchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  let amount: number;
+  try {
+    amount = parseBRL(String(form.get("amount") ?? ""));
+  } catch {
+    return { ok: false, error: "Valor inválido", field: "amount" };
+  }
+  if (amount <= 0) return { ok: false, error: "Informe um valor maior que zero", field: "amount" };
+  const { supabase } = await requireUser();
+  const profile = await loadProfile(supabase);
+  const { cards } = await loadCards(supabase, profile);
+  const inv = cards.find((c) => c.id === parsed.data.card_id)?.invoices.find((i) => i.ref === parsed.data.invoice_ref);
+  if (!inv) return { ok: false, error: "Fatura não encontrada" };
+  if (inv.remaining <= 0) return { ok: false, error: "Esta fatura já está quitada" };
+  if (amount > inv.remaining) return { ok: false, error: `O valor passa do que falta pagar (${formatBRL(inv.remaining)})`, field: "amount" };
+  const status = parsed.data.date > todayIn(profile.timezone) ? "scheduled" : "confirmed";
+  const { error } = await supabase.rpc("pay_invoice", {
+    p_card: parsed.data.card_id,
+    p_invoice_ref: parsed.data.invoice_ref,
+    p_account: parsed.data.account_id,
+    p_amount_cents: amount,
+    p_date: parsed.data.date,
+    p_status: status,
+    p_idempotency_key: `invpay:${parsed.data.key}`,
+  });
+  if (error) return { ok: false, error: "Não foi possível registrar o pagamento" };
+  revalidatePath("/", "layout");
+  const left = inv.remaining - amount;
+  return { ok: true, message: left === 0 ? "Fatura quitada." : `Pagamento registrado. Ainda faltam ${formatBRL(left as Cents)}.` };
+}
+
+export async function reverseInvoicePayment(_: CardActionResult, form: FormData): Promise<CardActionResult> {
+  const id = z.uuid().safeParse(form.get("id"));
+  if (!id.success) return { ok: false, error: "Pagamento inválido" };
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("reverse_invoice_payment", { p_entry: id.data });
+  if (error) return { ok: false, error: /já estornado/.test(error.message) ? "Este pagamento já foi estornado." : "Não foi possível estornar o pagamento" };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Pagamento estornado: o valor voltou para a conta e para a fatura." };
 }

@@ -33,3 +33,30 @@ test("cartões sem rolagem horizontal", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("faturas: estados, pagamentos já feitos e modal de registrar pagamento", async ({ page }) => {
+  await page.goto("/dev/preview/cartoes");
+  const rows = page.getByTestId("invoice-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Parcialmente paga");
+  await expect(rows.first()).toContainText("R$ 814,88"); // falta
+  await expect(rows.first()).toContainText("R$ 400,00"); // pago
+  await expect(rows.nth(1)).toContainText("Fechada");
+  await rows.first().getByRole("button", { name: "Registrar pagamento" }).click();
+  const dlg = page.getByRole("dialog", { name: "Registrar pagamento" });
+  await expect(dlg).toContainText("Valor da fatura");
+  await expect(dlg).toContainText("Falta pagar");
+  await expect(dlg.getByLabel("Valor a pagar")).toHaveValue("R$ 814,88");
+  await dlg.getByRole("button", { name: "Pagar tudo" }).click();
+  await expect(dlg.getByRole("combobox")).toContainText("Conta principal");
+  await dlg.getByRole("button", { name: "Cancelar" }).click();
+  await rows.first().getByRole("button", { name: /Estornar pagamento/ }).click();
+  await expect(page.getByRole("dialog", { name: "Estornar este pagamento?" })).toContainText("só pode ser feito uma vez");
+});
+
+test("faturas: sem rolagem horizontal no celular", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/dev/preview/cartoes");
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(0);
+});
