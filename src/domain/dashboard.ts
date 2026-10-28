@@ -89,7 +89,9 @@ export interface DashboardModel {
     bankBalance: Cents;
     toReceive: Cents;
     toPay: Cents;
+    /** fatura ainda aberta (não fechada) de cada cartão; parcelas futuras ficam em `futureInvoices` */
     openInvoices: Cents;
+    futureInvoices: Cents;
     closedUnpaid: Cents;
     monthExpenses: Cents;
     monthIncome: Cents;
@@ -163,13 +165,20 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   });
 
   let openInvoices = 0;
+  let futureInvoices = 0;
   let closedUnpaid = 0;
   const cards = input.cards.map((meta) => {
     const c = base.cards.find((x) => x.id === meta.id)!;
     const invoices = computeInvoices(c.config, c.charges, c.payments, today);
     let current: (typeof invoices)[number] | undefined;
+    let openSeen = false;
     for (const inv of invoices) {
-      if (inv.status === "open") openInvoices += inv.remaining;
+      if (inv.status === "open") {
+        if (!openSeen) {
+          openInvoices += inv.remaining;
+          openSeen = true;
+        } else futureInvoices += inv.remaining;
+      }
       if (inv.status === "closed" || inv.status === "overdue") closedUnpaid += inv.remaining;
       if (!current && inv.remaining > 0 && inv.dueDate >= today) current = inv;
     }
@@ -182,6 +191,11 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   });
 
   const flows = timeline.events.filter((e) => e.status !== "realized" && e.status !== "hypothetical");
+  // "A receber"/"A pagar" não dependem do ajuste de receitas previstas e ignoram transferências
+  // (os dois lados se anulam) — fonte única para o card e para o detalhamento.
+  const payables = withExpected.events.filter(
+    (e) => e.status !== "realized" && e.status !== "hypothetical" && e.kind !== "transfer",
+  );
   const month = monthOf(today);
   const monthStart = `${month}-01`;
   const monthEnd = horizonEndOfMonth(today);
@@ -224,9 +238,10 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     hasDemo: input.accounts.some((a) => a.isDemo),
     totals: {
       bankBalance: timeline.startBalance,
-      toReceive: sum(flows.filter((e) => e.amount > 0).map((e) => e.amount)),
-      toPay: sum(flows.filter((e) => e.amount < 0).map((e) => -e.amount)),
+      toReceive: sum(payables.filter((e) => e.amount > 0).map((e) => e.amount)),
+      toPay: sum(payables.filter((e) => e.amount < 0).map((e) => -e.amount)),
       openInvoices: openInvoices as Cents,
+      futureInvoices: futureInvoices as Cents,
       closedUnpaid: closedUnpaid as Cents,
       monthExpenses: sum(lines.map((l) => l.amount)),
       monthIncome: incomeTotal(base.entries, monthStart, monthEnd),

@@ -593,12 +593,72 @@ describe("renda fixa", () => {
     expect(await as(BOB, () => q(`select 1 from fixed_incomes`))).toHaveLength(0);
     await expect(as(BOB, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-05')`, [fid]))).rejects.toThrow();
 
-    // com histórico, remover só encerra
+    // com recebimento CONFIRMADO, excluir some da lista mas preserva o dinheiro que entrou
     const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
-    expect(res.r).toBe("ended");
+    expect(res.r).toBe("deleted_with_history");
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1 and deleted_at is null`, [fid]))).toHaveLength(0);
+    expect(await balance(ALICE, acc)).toBe(180000); // o dinheiro que já entrou continua no extrato
     // conta com renda fixa só arquiva
     const rm = await as(ALICE, () => one<{ r: string }>(`select remove_account($1) as r`, [acc]));
     expect(rm.r).toBe("archived");
+  });
+
+  it("excluir uma renda só com lançamentos PREVISTOS apaga tudo (bug: virava 'encerrada' e ficava na lista)", async () => {
+    const acc = await newAccount(ALICE, "Conta exclusão renda");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'salary', 'Salário teste', null, 160000, 4::smallint, '2026-08-04', null, $1, null, null) as id`, [acc])).id);
+    // o sistema cria sozinho os meses vencidos como PREVISTOS
+    for (const [p, d] of [["2026-08", "2026-08-04"], ["2026-09", "2026-09-04"], ["2026-10", "2026-10-04"]]) {
+      await as(ALICE, () => q(`select record_fixed_income_entry($1, $2, $3)`, [fid, p, d]));
+    }
+    expect(await as(ALICE, () => q(`select 1 from account_entries where fixed_income_id = $1`, [fid]))).toHaveLength(3);
+
+    const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
+    expect(res.r).toBe("deleted");
+    // a renda e todos os seus lançamentos sumiram: nada órfão, nada na lista
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1`, [fid]))).toHaveLength(0);
+    expect(await as(ALICE, () => q(`select 1 from account_entries where fixed_income_id = $1`, [fid]))).toHaveLength(0);
+    expect(await as(ALICE, () => q(`select 1 from account_entries where description = 'Salário teste'`))).toHaveLength(0);
+    expect(await balance(ALICE, acc)).toBe(0);
+    // não dá para excluir de novo nem lançar mês para ela
+    await expect(as(ALICE, () => q(`select remove_fixed_income($1, '2026-10-20')`, [fid]))).rejects.toThrow(/não encontrada/);
+    await expect(as(ALICE, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-04')`, [fid]))).rejects.toThrow(/não encontrada/);
+  });
+
+  it("encerrar × excluir: encerrada guarda histórico e não gera mais; excluída com histórico fica oculta e não volta", async () => {
+    const acc = await newAccount(ALICE, "Conta encerrar renda");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'client', 'Cliente X', 'X', 90000, 10::smallint, '2026-08-10', null, $1, null, null) as id`, [acc])).id);
+    const ids: string[] = [];
+    for (const [p, d] of [["2026-08", "2026-08-10"], ["2026-09", "2026-09-10"]]) {
+      const r = await as(ALICE, () => one<{ r: { id: string } }>(`select record_fixed_income_entry($1, $2, $3) as r`, [fid, p, d]));
+      ids.push(r.r.id);
+    }
+    await as(ALICE, () => q(`select confirm_entry($1, '2026-08-10')`, [ids[0]])); // agosto: dinheiro entrou; setembro: só previsto
+
+    // previsão de mês futuro criada à mão (ex.: lançamento adiantado) some ao encerrar; o confirmado e o vencido ficam
+    await as(ALICE, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-10')`, [fid]));
+    const ended = await as(ALICE, () => one<{ r: string }>(`select end_fixed_income($1, '2026-10-16') as r`, [fid]));
+    expect(ended.r).toBe("ended");
+    const f = await as(ALICE, () => one<{ status: string; deleted_at: string | null; end_date: string }>(`select status, deleted_at, to_char(end_date,'YYYY-MM-DD') as end_date from fixed_incomes where id = $1`, [fid]));
+    expect(f.status).toBe("ended");
+    expect(f.deleted_at).toBeNull(); // encerrada continua consultável
+    expect(f.end_date).toBe("2026-10-16");
+    const left = await as(ALICE, () => q<{ fixed_income_period: string }>(`select fixed_income_period from account_entries where fixed_income_id = $1 order by 1`, [fid]));
+    expect(left.map((x) => x.fixed_income_period)).toEqual(["2026-08", "2026-09"]);
+    // encerrada não recebe mês novo
+    const noNew = await as(ALICE, () => one<{ r: { created: boolean } }>(`select record_fixed_income_entry($1, '2026-10', '2026-10-10') as r`, [fid]));
+    expect(noNew.r.created).toBe(false);
+
+    // excluir: o previsto de setembro some; o confirmado de agosto fica no extrato; a renda sai da lista
+    const del = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-16') as r`, [fid]));
+    expect(del.r).toBe("deleted_with_history");
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1 and deleted_at is null`, [fid]))).toHaveLength(0);
+    const kept = await as(ALICE, () => q<{ status: string }>(`select status from account_entries where fixed_income_id = $1 and deleted_at is null`, [fid]));
+    expect(kept.map((k) => k.status)).toEqual(["confirmed"]);
+    expect(await balance(ALICE, acc)).toBe(90000);
+    // e outro usuário não consegue encerrar nem excluir
+    await expect(as(BOB, () => q(`select end_fixed_income($1, '2026-10-16')`, [fid]))).rejects.toThrow();
   });
 
   it("sem histórico, remover apaga", async () => {

@@ -141,13 +141,12 @@ describe("[4] pagamento parcial de fatura", () => {
     expect(inv.remaining).toBe(51488);
     expect(inv.status).toBe("closed");
   });
-  it("após o vencimento, o saldo não pago é levado para a próxima fatura (sem duplicar)", () => {
+  it("após o vencimento, o saldo não pago continua pendente na própria fatura (vencida)", () => {
     const inv = computeInvoices(nubank, [charge("2026-10", 81488), charge("2026-11", 10000)], [pay("2026-10", 30000)], "2026-10-25");
-    expect(inv[0].status).toBe("rolled_over");
-    expect(inv[0].remaining).toBe(0);
-    expect(inv[1].carriedIn).toBe(51488);
-    expect(inv[1].total).toBe(61488);
-    // a dívida total permanece a mesma
+    expect(inv[0].status).toBe("overdue");
+    expect(inv[0].remaining).toBe(51488);
+    expect(inv[1].carriedIn).toBe(0);
+    expect(inv[1].total).toBe(10000);
     expect(inv[0].remaining + inv[1].remaining).toBe(81488 + 10000 - 30000);
   });
   it("pagamento a maior vira crédito na próxima fatura", () => {

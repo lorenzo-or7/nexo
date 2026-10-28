@@ -40,13 +40,15 @@ const MISSING = new Set(["42P01", "PGRST205", "42703", "PGRST204"]);
 
 /** Fontes de renda fixa. Retorna null se a migration ainda não foi aplicada. */
 export async function loadFixedIncomeRows(supabase: SupabaseClient): Promise<FixedIncomeRow[] | null> {
-  const [list, entries] = await Promise.all([
-    supabase
-      .from("fixed_incomes")
-      .select("id,kind,name,client_name,amount_cents,day_of_month,start_date,end_date,account_id,category_id,notes,status")
-      .order("created_at"),
+  const COLS = "id,kind,name,client_name,amount_cents,day_of_month,start_date,end_date,account_id,category_id,notes,status";
+  const [first, entries] = await Promise.all([
+    // renda excluída (deleted_at) nunca aparece, nem entra em projeção
+    supabase.from("fixed_incomes").select(COLS).is("deleted_at", null).order("created_at"),
     supabase.from("account_entries").select("fixed_income_id,fixed_income_period,status,amount_cents,deleted_at").not("fixed_income_id", "is", null),
   ]);
+  let list = first;
+  // 42703 = coluna deleted_at inexistente: a migration do ciclo de vida da renda ainda não rodou (comportamento antigo)
+  if (list.error?.code === "42703") list = await supabase.from("fixed_incomes").select(COLS).order("created_at");
   const err = list.error ?? entries.error;
   if (err) {
     if (MISSING.has(err.code)) return null;

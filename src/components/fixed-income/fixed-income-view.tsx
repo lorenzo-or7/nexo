@@ -10,14 +10,17 @@ import { KIND_LABEL, type FixedIncomeKind, type FixedIncomeTotals } from "@/doma
 import { formatBRL, type Cents } from "@/domain/money";
 import type { QuickEntryData } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
-import { FixedIncomeEditor, FixedStatusButton, RemoveFixedIncomeButton, type FixedIncomeItem } from "./fixed-income-dialogs";
+import { EndFixedIncomeButton, FixedIncomeEditor, FixedStatusButton, RemoveFixedIncomeButton, type FixedIncomeItem } from "./fixed-income-dialogs";
 
-type Tab = "all" | FixedIncomeKind;
+type Tab = "all" | FixedIncomeKind | "ended";
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "Todas" },
   { key: "salary", label: "Salário" },
   { key: "client", label: "Clientes" },
+  { key: "ended", label: "Encerradas" },
 ];
+/** As abas de uso normal só mostram rendas ativas ou pausadas; as encerradas ficam no histórico. */
+const inTab = (i: FixedIncomeItem, t: Tab) => (t === "ended" ? i.status === "ended" : i.status !== "ended" && (t === "all" || i.kind === t));
 
 function when(days: number | null): string {
   if (days === null) return "";
@@ -43,9 +46,9 @@ export function FixedIncomeView({
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<{ item?: FixedIncomeItem; kind?: FixedIncomeKind } | null>(openNew ? {} : null);
   const shown = items
-    .filter((i) => tab === "all" || i.kind === tab)
+    .filter((i) => inTab(i, tab))
     .sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || (a.nextDate ?? "9999").localeCompare(b.nextDate ?? "9999") || a.name.localeCompare(b.name));
-  const count = (t: Tab) => items.filter((i) => t === "all" || i.kind === t).length;
+  const count = (t: Tab) => items.filter((i) => inTab(i, t)).length;
   const hasSalary = items.some((i) => i.kind === "salary");
 
   const newButton = (
@@ -108,12 +111,12 @@ export function FixedIncomeView({
               </div>
 
               {shown.length === 0 ? (
-                <p className="text-ink-3">Nada aqui.</p>
+                <p className="text-ink-3">{tab === "ended" ? "Nenhuma renda encerrada." : "Nada aqui."}</p>
               ) : (
                 <ul className="grid grid-cols-1 gap-5 2xl:grid-cols-2">
                   {shown.map((s) => (
                     <li key={s.id} className="min-w-0">
-                      <Panel className={cn("relative flex h-full flex-col gap-4 overflow-hidden p-5", s.status !== "active" && "opacity-75")} data-testid="fixed-income">
+                      <Panel className={cn("relative flex h-full flex-col gap-4 overflow-hidden p-5", s.status === "paused" && "opacity-75")} data-testid="fixed-income">
                         <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full opacity-25 blur-2xl" style={{ background: s.color }} />
                         <div className="relative flex items-start gap-3">
                           <span className="grid size-11 shrink-0 place-items-center rounded-xl text-white" style={{ background: `linear-gradient(135deg, ${s.color}, color-mix(in oklab, ${s.color} 55%, black))` }}>
@@ -168,6 +171,7 @@ export function FixedIncomeView({
                             )}
                             {s.status === "active" && <FixedStatusButton item={s} action="pause" />}
                             {s.status === "paused" && <FixedStatusButton item={s} action="resume" />}
+                            {s.status !== "ended" && <EndFixedIncomeButton item={s} />}
                             <RemoveFixedIncomeButton item={s} />
                           </div>
                         </div>

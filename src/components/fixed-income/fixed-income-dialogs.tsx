@@ -1,7 +1,7 @@
 "use client";
-import { Pause, Play, Trash2, X } from "lucide-react";
+import { Pause, Play, StopCircle, Trash2, X } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
-import { changeFixedIncomeStatus, removeFixedIncome, saveFixedIncome, type FixedIncomeActionResult } from "@/app/(app)/renda-fixa/actions";
+import { changeFixedIncomeStatus, endFixedIncome, removeFixedIncome, saveFixedIncome, type FixedIncomeActionResult } from "@/app/(app)/renda-fixa/actions";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { categoryColor, categoryTree } from "@/domain/categories";
 import { formatDateBR, parseDate, type LocalDate } from "@/domain/dates";
 import type { FixedIncomeKind, FixedIncomeStatus } from "@/domain/fixed-income";
-import { centsToInput, type Cents } from "@/domain/money";
+import { centsToInput, formatBRL, type Cents } from "@/domain/money";
 import type { QuickEntryData } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
 
@@ -209,6 +209,34 @@ export function FixedStatusButton({ item, action }: { item: FixedIncomeItem; act
   );
 }
 
+export function EndFixedIncomeButton({ item }: { item: FixedIncomeItem }) {
+  const [open, setOpen] = useState(false);
+  const [state, run, pending] = useActionState<FixedIncomeActionResult, FormData>(endFixedIncome, undefined);
+  useDone(state, () => setOpen(false));
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" aria-label={`Encerrar ${item.name}`} title="Encerrar" className={iconBtn}>
+          <StopCircle className="size-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent title={`Encerrar ${item.name}?`} className="[--dialog-w:460px]">
+        <form action={run} className="grid gap-5 p-5 sm:p-6">
+          <input type="hidden" name="id" value={item.id} />
+          {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
+          <p className="text-ink-2">
+            Encerrar é diferente de excluir: a renda para de gerar novos meses e sai da previsão, mas continua na aba <strong>Encerradas</strong>, com o histórico do que já foi recebido.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Voltar</Button>
+            <Button type="submit" variant="accent" loading={pending}>Encerrar renda</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RemoveFixedIncomeButton({ item }: { item: FixedIncomeItem }) {
   const [open, setOpen] = useState(false);
   const [state, run, pending] = useActionState<FixedIncomeActionResult, FormData>(removeFixedIncome, undefined);
@@ -225,10 +253,12 @@ export function RemoveFixedIncomeButton({ item }: { item: FixedIncomeItem }) {
           <input type="hidden" name="id" value={item.id} />
           {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
           <p className="text-ink-2">
+            A renda some da lista e das previsões e não volta. As previsões ainda não confirmadas são apagadas.
             {item.receivedCount > 0
-              ? "Já há recebimentos registrados, então ela é encerrada: para de gerar novos meses e o histórico fica no Extrato."
-              : "Ainda não há recebimentos confirmados: ela é apagada de vez."}
+              ? ` Os ${item.receivedCount} recebimento${item.receivedCount > 1 ? "s" : ""} já confirmado${item.receivedCount > 1 ? "s" : ""} (${formatBRL(item.receivedTotal)}) continuam no Extrato, porque esse dinheiro realmente entrou.`
+              : " Nenhum dinheiro confirmado está ligado a ela, então nada fica para trás."}
           </p>
+          <p className="text-sm text-ink-3">Quer só parar de receber? Use <strong>Encerrar</strong>: a renda continua no histórico.</p>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Voltar</Button>
             <Button type="submit" variant="accent" loading={pending}>Excluir</Button>

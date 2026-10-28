@@ -248,19 +248,14 @@ export function computeInvoices(
       carriedOut = 0;
       status = total > 0 || paid > 0 ? "paid" : isClosed ? "closed" : "open";
     } else if (isPastDue) {
-      remaining = 0;
-      carriedOut = balance;
-      status = "rolled_over";
+      // vencida e não quitada: continua pendente na própria fatura (não some nem é empurrada)
+      remaining = balance;
+      carriedOut = 0;
+      status = "overdue";
     } else {
       remaining = balance;
       carriedOut = 0;
       status = isClosed ? "closed" : "open";
-    }
-    if (status === "rolled_over" && ref === lastRef) {
-      // não há próxima fatura no intervalo para receber o saldo: continua devido e vencido
-      remaining = balance;
-      carriedOut = 0;
-      status = "overdue";
     }
     out.push({
       ref,

@@ -47,7 +47,7 @@ Estas regras estão implementadas em `src/domain/` (funções puras, sem banco) 
 - É um lançamento de conta `invoice_payment` ligado a cartão + fatura. Reduz a conta e o devido.
 - **Não é despesa de consumo** — a despesa já foi contada na compra. Relatórios de consumo excluem esse tipo.
 - Integral, parcial ou antecipado (fatura ainda aberta).
-- Restante de fatura **vencida** é levado à próxima (saldo devedor); juros entram como lançamento `fee` informado.
+- Restante de fatura **vencida** continua pendente na própria fatura (status *Vencida*); só vira *Paga* com restante zero, em qualquer data. Juros entram como lançamento `fee` informado.
 - Pagamento a maior vira **crédito** na próxima fatura.
 
 **Estorno** [10]
