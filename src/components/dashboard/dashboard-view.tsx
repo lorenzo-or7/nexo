@@ -8,6 +8,7 @@ import { formatDateBR } from "@/domain/dates";
 import type { TimelineStatus } from "@/domain/timeline";
 import { cn } from "@/lib/cn";
 import { ForecastPanel } from "./forecast-panel";
+import { IndicatorProvider, IndicatorTrigger, type IndicatorKey } from "./indicator-detail";
 import { BankCardFace } from "@/components/cards/bank-card-face";
 
 const HORIZONS = [
@@ -62,7 +63,7 @@ export function DashboardView({
   }
 
   return (
-    <>
+    <IndicatorProvider model={model}>
       <PageHeader
         title={greeting}
         subtitle={`Hoje é ${formatDateBR(model.today)}`}
@@ -93,9 +94,11 @@ export function DashboardView({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-6">
           <Panel>
-            <p className="text-sm text-ink-2">Saldo em conta hoje</p>
-            <p className="mt-1 text-[2rem] font-semibold tracking-[-0.035em]"><Money value={t.bankBalance} /></p>
-            <p className="mt-1 text-sm text-ink-3">Só o que já entrou e saiu de verdade.</p>
+            <IndicatorTrigger k="bank" className="block w-full">
+              <p className="text-sm text-ink-2">Saldo em conta hoje</p>
+              <p className="mt-1 text-[2rem] font-semibold tracking-[-0.035em]"><Money value={t.bankBalance} /></p>
+              <p className="mt-1 text-sm text-ink-3">Só o que já entrou e saiu de verdade.</p>
+            </IndicatorTrigger>
             {model.accounts.length > 0 && (
               <ul className="mt-4 grid gap-2 border-t border-border pt-4">
                 {model.accounts.map((a) => (
@@ -111,17 +114,17 @@ export function DashboardView({
             )}
           </Panel>
           <Panel className="grid grid-cols-2 gap-3 p-4 sm:p-4">
-            {[
-              { label: "A receber", value: t.toReceive, icon: <ArrowDownLeft className="size-4" />, tone: "text-positive bg-positive-soft" },
-              { label: "A pagar", value: t.toPay, icon: <ArrowUpRight className="size-4" />, tone: "text-negative bg-accent-soft" },
-              { label: "Faturas abertas", value: t.openInvoices, icon: <CreditCard className="size-4" />, tone: "text-ink-2 bg-surface-2" },
-              { label: "Fechadas a pagar", value: t.closedUnpaid, icon: <CalendarClock className="size-4" />, tone: "text-ink-2 bg-surface-2" },
-            ].map((x) => (
-              <div key={x.label} className="rounded-2xl border border-border bg-field/50 p-3.5">
+            {([
+              { key: "receive", label: "A receber", value: t.toReceive, icon: <ArrowDownLeft className="size-4" />, tone: "text-positive bg-positive-soft" },
+              { key: "pay", label: "A pagar", value: t.toPay, icon: <ArrowUpRight className="size-4" />, tone: "text-negative bg-accent-soft" },
+              { key: "open", label: "Faturas abertas", value: t.openInvoices, icon: <CreditCard className="size-4" />, tone: "text-ink-2 bg-surface-2" },
+              { key: "closed", label: "Fechadas a pagar", value: t.closedUnpaid, icon: <CalendarClock className="size-4" />, tone: "text-ink-2 bg-surface-2" },
+            ] as { key: IndicatorKey; label: string; value: number; icon: React.ReactNode; tone: string }[]).map((x) => (
+              <IndicatorTrigger key={x.key} k={x.key} className="rounded-2xl border border-border bg-field/50 p-3.5 hover:border-accent">
                 <span className={cn("grid size-8 place-items-center rounded-lg", x.tone)}>{x.icon}</span>
                 <p className="mt-3 text-sm text-ink-2">{x.label}</p>
                 <p className="mt-0.5 text-lg font-semibold tracking-tight"><Money value={x.value} /></p>
-              </div>
+              </IndicatorTrigger>
             ))}
           </Panel>
         </div>
@@ -227,6 +230,6 @@ export function DashboardView({
           )}
         </Panel>
       </div>
-    </>
+    </IndicatorProvider>
   );
 }

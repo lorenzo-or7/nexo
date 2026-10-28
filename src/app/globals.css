@@ -201,6 +201,9 @@ button[role="combobox"]:focus-visible {
 @keyframes sheet-up {
   from { transform: translateY(24px); opacity: 0; }
 }
+@keyframes panel-right {
+  from { transform: translateX(32px); opacity: 0; }
+}
 @keyframes pop-in {
   from { opacity: 0; scale: 0.97; }
 }

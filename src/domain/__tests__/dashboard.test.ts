@@ -130,4 +130,24 @@ describe("dashboard derivado dos dados", () => {
     expect(d.totals.openInvoices).toBe(81488);
     expect(d.totals.futureInvoices).toBeGreaterThanOrEqual(99900);
   });
+
+  it("detalhamento fecha exatamente com os indicadores principais", () => {
+    const d = buildDashboard(input());
+    const t = d.totals;
+    const sumItems = (l: { amount: number }[]) => l.reduce((a, x) => a + x.amount, 0);
+    expect(sumItems(d.details.receivables)).toBe(t.toReceive);
+    expect(-sumItems(d.details.payables)).toBe(t.toPay);
+    expect(sumItems(d.details.openInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.openInvoices);
+    expect(sumItems(d.details.futureInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.futureInvoices);
+    expect(sumItems(d.details.closedInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.closedUnpaid);
+    expect(sumItems(d.accounts.map((a) => ({ amount: a.balance })))).toBe(t.bankBalance);
+    for (const [k, sc] of [["confirmed", d.scenarios.confirmed], ["withExpected", d.scenarios.withExpected]] as const) {
+      const c = d.details.composition[k];
+      expect(c.startBalance + sumItems(c.rows)).toBe(c.endBalance);
+      expect(c.endBalance).toBe(sc.projected);
+      expect(c.free).toBe(sc.free);
+      expect(c.lowest).toBe(sc.lowest);
+      expect(Math.min(...c.series.map((x) => x.balance))).toBe(c.lowest);
+    }
+  });
 });

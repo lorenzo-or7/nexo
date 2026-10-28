@@ -2,10 +2,11 @@
  * Monta o modelo da tela inicial a partir dos dados reais (já carregados do banco).
  * Função pura e serializável: tudo que aparece no dashboard é derivado daqui.
  */
-import { computeInvoices } from "./billing";
+import { computeInvoices, invoiceLabel } from "./billing";
 import { categoryColor } from "./categories";
 import { addDays, monthOf, type LocalDate } from "./dates";
 import { accountBalance, incomeTotal, spendingLines, type AccountEntry } from "./ledger";
+import { compose, toDetailItem, type Composition, type DetailItem, type InvoiceDetail } from "./indicators";
 import { sum, type Cents } from "./money";
 import { buildTimeline, freeToSpend, horizonEndOfMonth, type TimelineInput, type TimelineStatus } from "./timeline";
 
@@ -110,6 +111,15 @@ export interface DashboardModel {
   byCategory: { name: string; amount: Cents; color: string }[];
   /** destaque nos dois cenários: o usuário alterna na tela */
   scenarios: { confirmed: ForecastScenario; withExpected: ForecastScenario };
+  /** composição de cada indicador (abre no painel de detalhes) */
+  details: {
+    receivables: DetailItem[];
+    payables: DetailItem[];
+    openInvoices: InvoiceDetail[];
+    futureInvoices: InvoiceDetail[];
+    closedInvoices: InvoiceDetail[];
+    composition: { confirmed: Composition; withExpected: Composition };
+  };
   /** dados dos gráficos (valores em reais, só para desenhar) */
   chart: { days: ChartDay[]; expectedIncome: ExpectedIncomeItem[]; defaultShowExpected: boolean };
 }
@@ -167,19 +177,33 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   let openInvoices = 0;
   let futureInvoices = 0;
   let closedUnpaid = 0;
+  const openList: InvoiceDetail[] = [];
+  const futureList: InvoiceDetail[] = [];
+  const closedList: InvoiceDetail[] = [];
   const cards = input.cards.map((meta) => {
     const c = base.cards.find((x) => x.id === meta.id)!;
     const invoices = computeInvoices(c.config, c.charges, c.payments, today);
     let current: (typeof invoices)[number] | undefined;
     let openSeen = false;
     for (const inv of invoices) {
-      if (inv.status === "open") {
+      const detail: InvoiceDetail = {
+        cardId: meta.id, cardName: meta.name, ref: inv.ref, label: invoiceLabel(inv),
+        closingDate: inv.closingDate, dueDate: inv.dueDate, total: inv.total, paid: inv.paid, remaining: inv.remaining,
+      };
+      if (inv.status === "open" && inv.remaining > 0) {
         if (!openSeen) {
           openInvoices += inv.remaining;
+          openList.push(detail);
           openSeen = true;
-        } else futureInvoices += inv.remaining;
+        } else {
+          futureInvoices += inv.remaining;
+          futureList.push(detail);
+        }
       }
-      if (inv.status === "closed" || inv.status === "overdue") closedUnpaid += inv.remaining;
+      if ((inv.status === "closed" || inv.status === "overdue") && inv.remaining > 0) {
+        closedUnpaid += inv.remaining;
+        closedList.push(detail);
+      }
       if (!current && inv.remaining > 0 && inv.dueDate >= today) current = inv;
     }
     return {
@@ -261,6 +285,17 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount: amount as Cents, color: catColor.get(name)! })),
+    details: {
+      receivables: payables.filter((e) => e.amount > 0).map(toDetailItem),
+      payables: payables.filter((e) => e.amount < 0).map(toDetailItem),
+      openInvoices: openList,
+      futureInvoices: futureList,
+      closedInvoices: closedList,
+      composition: {
+        confirmed: compose(confirmedOnly, { reserve: input.reserve, safetyMargin: input.safetyMargin }),
+        withExpected: compose(withExpected, { reserve: input.reserve, safetyMargin: input.safetyMargin }),
+      },
+    },
     scenarios: { confirmed: scenarioOf(confirmedOnly, 0 as Cents), withExpected: scenarioOf(withExpected, expectedTotal) },
     chart: { days: chartDays, expectedIncome, defaultShowExpected: base.includeExpectedIncome },
   };

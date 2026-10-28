@@ -14,11 +14,14 @@ export function DialogContent({
   description,
   children,
   className,
+  side,
 }: {
   title: string;
   description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** painel lateral no desktop (folha inferior no celular) */
+  side?: boolean;
 }) {
   return (
     <D.Portal>
@@ -27,7 +30,9 @@ export function DialogContent({
         className={cn(
           "panel fixed z-50 flex max-h-[92dvh] flex-col overflow-hidden text-ink shadow-[0_30px_80px_-30px_rgba(20,8,24,0.8)] focus:outline-none",
           "inset-x-0 bottom-0 rounded-t-[1.5rem] pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,.8,.2,1)]",
-          "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(92vw,var(--dialog-w,560px))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[1.5rem] sm:data-[state=open]:animate-[pop-in_180ms_ease-out]",
+          side
+            ? "lg:inset-x-auto lg:bottom-auto lg:right-0 lg:top-0 lg:h-dvh lg:max-h-none lg:w-[min(100vw,var(--dialog-w,480px))] lg:rounded-none lg:rounded-l-[1.5rem] lg:pb-0 lg:data-[state=open]:animate-[panel-right_260ms_cubic-bezier(.2,.8,.2,1)]"
+            : "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(92vw,var(--dialog-w,560px))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[1.5rem] sm:data-[state=open]:animate-[pop-in_180ms_ease-out]",
           className,
         )}
       >
