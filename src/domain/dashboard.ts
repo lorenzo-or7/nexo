@@ -3,7 +3,7 @@
  * Função pura e serializável: tudo que aparece no dashboard é derivado daqui.
  */
 import { computeInvoices, invoiceLabel } from "./billing";
-import { categoryColor } from "./categories";
+import { categoryBreakdown, type CategoryBreakdownItem } from "./categories";
 import { addDays, monthOf, type LocalDate } from "./dates";
 import { accountBalance, incomeTotal, spendingLines, type AccountEntry } from "./ledger";
 import { compose, toDetailItem, type Composition, type DetailItem, type InvoiceDetail } from "./indicators";
@@ -109,6 +109,10 @@ export interface DashboardModel {
   series: { date: LocalDate; balance: number }[];
   recent: { id: string; date: LocalDate; label: string; amount: Cents; kind: string }[];
   byCategory: { name: string; amount: Cents; color: string }[];
+  /** categorias principais com suas subcategorias (para o detalhamento por nível) */
+  categoryTree: CategoryBreakdownItem[];
+  /** mês (AAAA-MM) a que as despesas por categoria se referem */
+  categoryMonth: string;
   /** destaque nos dois cenários: o usuário alterna na tela */
   scenarios: { confirmed: ForecastScenario; withExpected: ForecastScenario };
   /** composição de cada indicador (abre no painel de detalhes) */
@@ -226,28 +230,7 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   const chargesFlat = base.cards.flatMap((c) => c.charges.map((ch) => ({ ...ch })));
   const lines = spendingLines(base.entries, chargesFlat, monthStart, monthEnd);
 
-  const catName = new Map(input.categories.map((c) => [c.id, c]));
-  const topName = (id: string | null) => {
-    if (!id) return "Sem categoria";
-    let c = catName.get(id);
-    while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
-    return c?.name ?? "Sem categoria";
-  };
-  const topNode = (id: string | null) => {
-    let c = id ? catName.get(id) : undefined;
-    while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
-    return c;
-  };
-  const cat = new Map<string, number>();
-  const catColor = new Map<string, string>();
-  for (const l of lines) {
-    const name = topName(l.categoryId);
-    cat.set(name, (cat.get(name) ?? 0) + l.amount);
-    if (!catColor.has(name)) {
-      const node = topNode(l.categoryId);
-      catColor.set(name, categoryColor({ id: node?.id ?? name, name, parentId: null, kind: "expense", color: node?.color ?? null }, []));
-    }
-  }
+  const tree = categoryBreakdown(lines, input.categories).filter((c) => c.amount > 0);
 
   const recent = [...base.entries]
     .filter((e: AccountEntry) => e.status === "confirmed" && e.date <= today)
@@ -281,10 +264,9 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     upcoming: flows.slice(0, 8).map((e) => ({ date: e.date, label: e.label, amount: e.amount, status: e.status, originalDate: e.originalDate })),
     series: timeline.days.map((d) => ({ date: d.date, balance: d.closing / 100 })),
     recent,
-    byCategory: [...cat.entries()]
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, amount]) => ({ name, amount: amount as Cents, color: catColor.get(name)! })),
+    byCategory: tree.map((c) => ({ name: c.name, amount: c.amount as Cents, color: c.color })),
+    categoryTree: tree,
+    categoryMonth: month,
     details: {
       receivables: payables.filter((e) => e.amount > 0).map(toDetailItem),
       payables: payables.filter((e) => e.amount < 0).map(toDetailItem),

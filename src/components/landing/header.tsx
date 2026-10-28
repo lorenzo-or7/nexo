@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import * as React from "react";
-import { CoinToggle } from "@/components/brand/coin-toggle";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { ThemePicker } from "./theme-picker";
 
 export const NAV_LINKS = [
   { href: "#funcionalidades", label: "Funcionalidades" },
@@ -53,7 +53,7 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <CoinToggle className="size-9" />
+          <ThemePicker />
           <Button asChild variant="ghost" className="hidden h-10 px-3 md:inline-flex">
             <Link href="/entrar">Entrar</Link>
           </Button>

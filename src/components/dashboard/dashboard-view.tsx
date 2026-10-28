@@ -12,10 +12,10 @@ import { IndicatorProvider, IndicatorTrigger, type IndicatorKey } from "./indica
 import { BankCardFace } from "@/components/cards/bank-card-face";
 
 const HORIZONS = [
-  { key: "month", label: "Até o fim do mês" },
-  { key: "30", label: "30 dias" },
-  { key: "60", label: "60 dias" },
-  { key: "90", label: "90 dias" },
+  { key: "month", label: "Até o fim do mês", short: "Mês" },
+  { key: "30", label: "30 dias", short: "30 dias" },
+  { key: "60", label: "60 dias", short: "60 dias" },
+  { key: "90", label: "90 dias", short: "90 dias" },
 ] as const;
 
 const STATUS: Record<TimelineStatus, { label: string; className: string }> = {
@@ -68,18 +68,19 @@ export function DashboardView({
         title={greeting}
         subtitle={`Hoje é ${formatDateBR(model.today)}`}
         actions={
-          <nav aria-label="Período da projeção" className="flex rounded-full border border-border bg-field/60 p-1">
+          <nav aria-label="Período da projeção" className="flex max-w-full rounded-full border border-border bg-field/60 p-1">
             {HORIZONS.map((h) => (
               <Link
                 key={h.key}
                 href={h.key === "month" ? basePath : `${basePath}?h=${h.key}`}
                 aria-current={horizon === h.key ? "true" : undefined}
                 className={cn(
-                  "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
+                  "min-w-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm transition-colors sm:px-3",
                   horizon === h.key ? "btn-primary" : "text-ink-2 hover:text-ink",
                 )}
               >
-                {h.label}
+                <span className="sm:hidden">{h.short}</span>
+                <span className="hidden sm:inline">{h.label}</span>
               </Link>
             ))}
           </nav>
@@ -88,11 +89,11 @@ export function DashboardView({
 
       {demoNotice}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-6">
         {/* destaque: quanto posso gastar + gráficos (com seletor de receitas previstas) */}
         <ForecastPanel model={model} />
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-6">
           <Panel>
             <IndicatorTrigger k="bank" className="block w-full">
               <p className="text-sm text-ink-2">Saldo em conta hoje</p>
@@ -163,13 +164,13 @@ export function DashboardView({
         </ul>
       </section>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:gap-6">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2 lg:gap-6">
         <Panel>
           <PanelHeader title="Próximos vencimentos" description={`Até ${formatDateBR(model.horizonEnd)}`} />
           {model.upcoming.length === 0 ? (
             <p className="text-sm text-ink-3">Nada previsto para o período.</p>
           ) : (
-            <ol className="grid">
+            <ol className="grid grid-cols-[minmax(0,1fr)]">
               {model.upcoming.map((u, i) => (
                 <li key={i} className="flex items-center gap-3 border-t border-border py-3 first:border-t-0 first:pt-0">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">
@@ -177,7 +178,7 @@ export function DashboardView({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[0.9375rem] font-medium">{u.label}</span>
-                    <span className="mt-0.5 flex items-center gap-2 text-xs text-ink-3">
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
                       {formatDateBR(u.date)}
                       <span className={cn("rounded-full px-2 py-0.5", STATUS[u.status].className)}>{STATUS[u.status].label}</span>
                       {u.originalDate && <span>desde {short(u.originalDate)}</span>}

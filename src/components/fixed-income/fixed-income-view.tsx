@@ -92,9 +92,9 @@ export function FixedIncomeView({
             </div>
           </Panel>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="min-w-0">
-              <div role="tablist" aria-label="Tipo de renda" className="panel-quiet mb-6 inline-flex gap-1 rounded-full p-1">
+              <div role="tablist" aria-label="Tipo de renda" className="panel-quiet mb-6 flex w-full max-w-full gap-1 overflow-x-auto rounded-full p-1 sm:inline-flex sm:w-auto">
                 {TABS.map((t) => (
                   <button
                     key={t.key}
@@ -102,10 +102,10 @@ export function FixedIncomeView({
                     type="button"
                     aria-selected={tab === t.key}
                     onClick={() => setTab(t.key)}
-                    className={cn("h-9 rounded-full px-4 text-sm font-medium transition-colors", tab === t.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
+                    className={cn("h-9 shrink-0 flex-1 rounded-full px-2.5 text-[0.8125rem] font-medium sm:text-sm transition-colors sm:flex-none sm:px-4", tab === t.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
                   >
                     {t.label}
-                    <span className={cn("ml-1.5 tabular text-xs", tab === t.key ? "opacity-80" : "text-ink-3")}>{count(t.key)}</span>
+                    <span className={cn("ml-1 tabular text-xs sm:ml-1.5", tab === t.key ? "opacity-80" : "text-ink-3")}>{count(t.key)}</span>
                   </button>
                 ))}
               </div>
@@ -192,7 +192,7 @@ export function FixedIncomeView({
               {upcoming.length === 0 ? (
                 <p className="text-sm text-ink-3">Nada previsto.</p>
               ) : (
-                <ol className="grid">
+                <ol className="grid grid-cols-[minmax(0,1fr)]">
                   {upcoming.map((u) => (
                     <li key={u.id} className="flex items-center gap-3 border-t border-border py-3 first:border-t-0 first:pt-0">
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">

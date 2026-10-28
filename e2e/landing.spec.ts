@@ -109,3 +109,32 @@ test("[landing] não expõe segredos no HTML", async ({ request }) => {
   const html = await (await request.get("/")).text();
   expect(html).not.toMatch(/service_role|SUPABASE_SERVICE_ROLE|eyJ[A-Za-z0-9_-]{20,}\./);
 });
+
+test("[landing] seletor compacto troca modo e paleta na hora e a escolha sobrevive à navegação", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Aparência: modo e cores" }).click();
+  const pop = page.getByRole("radiogroup", { name: "Cores" });
+  await expect(pop.getByRole("radio")).toHaveCount(6);
+  await page.getByRole("radio", { name: "Violeta" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "violeta");
+  await page.getByRole("radio", { name: "Claro" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.keyboard.press("Escape");
+  // navegar e recarregar mantém a escolha (cookie)
+  await page.goto("/entrar");
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "violeta");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "violeta");
+});
+
+test("[landing] seletor cabe em 320px sem rolagem horizontal", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Aparência: modo e cores" }).click();
+  const box = await page.getByRole("radiogroup", { name: "Cores" }).boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(0);
+});

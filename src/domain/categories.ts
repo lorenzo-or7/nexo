@@ -54,3 +54,69 @@ export function hasNameConflict(all: CategoryNode[], name: string, parentId: str
   const n = name.toLocaleLowerCase("pt-BR");
   return all.some((c) => c.id !== exceptId && (c.parentId ?? null) === (parentId ?? null) && c.name.toLocaleLowerCase("pt-BR") === n);
 }
+
+export interface CategorySlice {
+  /** id da categoria; null = "Sem categoria" / "Sem subcategoria" */
+  id: string | null;
+  name: string;
+  color: string;
+  amount: number;
+}
+export interface CategoryBreakdownItem extends CategorySlice {
+  subs: CategorySlice[];
+}
+
+/**
+ * Despesas por categoria principal e, dentro de cada uma, por subcategoria.
+ * - lançamento direto na principal → "Sem subcategoria"
+ * - sem categoria, ou categoria apagada/inexistente → "Sem categoria" (principal)
+ * A soma das subcategorias é sempre igual ao total da principal, e a das principais ao total geral.
+ */
+export function categoryBreakdown(
+  lines: readonly { categoryId: string | null; amount: number }[],
+  categories: readonly { id: string; name: string; parentId: string | null; color?: string | null }[],
+): CategoryBreakdownItem[] {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const nodeOf = (c: { id: string; name: string; parentId: string | null; color?: string | null }): CategoryNode => ({ ...c, kind: "expense" });
+  const all = categories.map(nodeOf);
+  const tops = new Map<string, CategoryBreakdownItem>();
+  const subKey = (k: string | null) => k ?? "__none";
+  const subMaps = new Map<string, Map<string, CategorySlice>>();
+  for (const l of lines) {
+    let sub = l.categoryId ? byId.get(l.categoryId) : undefined;
+    let top = sub;
+    if (sub?.parentId) top = byId.get(sub.parentId);
+    // principal que sumiu: trata a linha como sem categoria
+    if (!top) {
+      top = undefined;
+      sub = undefined;
+    }
+    const topKey = top?.id ?? "__none";
+    if (!tops.has(topKey)) {
+      tops.set(topKey, {
+        id: top?.id ?? null,
+        name: top?.name ?? "Sem categoria",
+        color: top ? categoryColor(nodeOf(top), all) : "#5C677D",
+        amount: 0,
+        subs: [],
+      });
+      subMaps.set(topKey, new Map());
+    }
+    const t = tops.get(topKey)!;
+    t.amount += l.amount;
+    const sm = subMaps.get(topKey)!;
+    const isSub = top && sub && sub.id !== top.id;
+    const sk = isSub ? sub!.id : "__none";
+    if (!sm.has(subKey(isSub ? sub!.id : null))) {
+      sm.set(subKey(isSub ? sub!.id : null), {
+        id: isSub ? sub!.id : null,
+        name: isSub ? sub!.name : top ? "Sem subcategoria" : "Sem categoria",
+        color: isSub ? categoryColor(nodeOf(sub!), all) : t.color,
+        amount: 0,
+      });
+    }
+    sm.get(sk)!.amount += l.amount;
+  }
+  for (const [k, t] of tops) t.subs = [...subMaps.get(k)!.values()].filter((s) => s.amount !== 0).sort((a, b) => b.amount - a.amount);
+  return [...tops.values()].sort((a, b) => b.amount - a.amount);
+}

@@ -112,7 +112,10 @@ export interface EntryFilters {
   month?: string;
   accountId?: string;
   kind?: "income" | "expense" | "transfer" | "pending";
+  /** id da categoria, ou "none" para lançamentos sem categoria */
   categoryId?: string;
+  /** com categoria principal: só o que foi lançado direto nela (sem subcategoria) */
+  onlyParent?: boolean;
   q?: string;
 }
 
@@ -124,7 +127,8 @@ export function parseFilters(sp: Record<string, string | undefined>): EntryFilte
     month,
     accountId: uuid.test(sp.conta ?? "") ? sp.conta : undefined,
     kind,
-    categoryId: uuid.test(sp.categoria ?? "") ? sp.categoria : undefined,
+    categoryId: sp.categoria === "none" ? "none" : uuid.test(sp.categoria ?? "") ? sp.categoria : undefined,
+    onlyParent: sp.sem_sub === "1" && uuid.test(sp.categoria ?? "") ? true : undefined,
     q: sp.q ? sanitizeSearch(sp.q) || undefined : undefined,
   };
 }
@@ -151,9 +155,11 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
   if (f.kind === "income") query = query.in("kind", ["income", "refund"]);
   if (f.kind === "expense") query = query.in("kind", ["expense"]);
   if (f.kind === "transfer") query = query.eq("kind", "transfer");
-  if (f.categoryId) {
-    // categoria principal inclui as subcategorias
-    const ids = categoryFilterIds(f.categoryId, categories);
+  if (f.categoryId === "none") {
+    query = query.is("category_id", null);
+  } else if (f.categoryId) {
+    // categoria principal inclui as subcategorias (a menos que peça só o que está direto nela)
+    const ids = f.onlyParent ? [f.categoryId] : categoryFilterIds(f.categoryId, categories);
     query = query.in("category_id", ids);
   }
   if (f.q) query = query.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%,counterparty.ilike.%${f.q}%`);
@@ -227,8 +233,10 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
       .order("purchased_on", { ascending: false })
       .limit(ENTRY_LIMIT);
     if (range) pq = pq.gte("purchased_on", range.from).lte("purchased_on", range.to);
-    if (f.categoryId) {
-      const ids = categoryFilterIds(f.categoryId, categories);
+    if (f.categoryId === "none") {
+      pq = pq.is("category_id", null);
+    } else if (f.categoryId) {
+      const ids = f.onlyParent ? [f.categoryId] : categoryFilterIds(f.categoryId, categories);
       pq = pq.in("category_id", ids);
     }
     if (f.q) pq = pq.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%`);

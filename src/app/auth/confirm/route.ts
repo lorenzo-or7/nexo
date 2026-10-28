@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { adoptLocalPreferences } from "@/lib/theme/adopt";
 
 /** Destino dos links de e-mail (confirmação de cadastro e recuperação de senha). */
 export async function GET(request: NextRequest) {
@@ -17,6 +18,8 @@ export async function GET(request: NextRequest) {
   if (tokenHash && type) ok = !(await supabase.auth.verifyOtp({ type, token_hash: tokenHash })).error;
   else if (code) ok = !(await supabase.auth.exchangeCodeForSession(code)).error;
 
+  // primeira confirmação do e-mail: conta nova leva o tema escolhido na landing (se o link abrir no mesmo navegador)
+  if (ok && type === "signup") await adoptLocalPreferences(supabase);
   if (ok) return NextResponse.redirect(new URL(type === "recovery" ? "/auth/redefinir-senha" : safe, origin));
   return NextResponse.redirect(new URL("/entrar?erro=link", origin));
 }

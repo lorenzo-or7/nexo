@@ -5,7 +5,7 @@ export interface NavItem {
   label: string;
   short: string;
   icon: LucideIcon;
-  /** no celular vai para o painel "Mais" em vez da barra inferior (lá cabem 6 botões) */
+  /** no celular vai para o painel "Mais" em vez da barra inferior (a barra tem 4 atalhos + "Mais", para caber em 320px) */
   more?: boolean;
 }
 
@@ -15,7 +15,7 @@ export const NAV: NavItem[] = [
   { href: "/lancamentos", label: "Lançamentos", short: "Extrato", icon: ArrowLeftRight },
   { href: "/contas", label: "Contas", short: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", short: "Cartões", icon: CreditCard },
-  { href: "/assinaturas", label: "Assinaturas", short: "Assinaturas", icon: Repeat },
+  { href: "/assinaturas", label: "Assinaturas", short: "Assinaturas", icon: Repeat, more: true },
   { href: "/contas-fixas", label: "Contas fixas", short: "Fixas", icon: Receipt, more: true },
   { href: "/renda-fixa", label: "Renda fixa", short: "Renda fixa", icon: HandCoins, more: true },
   { href: "/categorias", label: "Categorias", short: "Categorias", icon: Tags, more: true },

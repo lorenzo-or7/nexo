@@ -48,3 +48,37 @@ test("categoria criada no próprio lançamento e filtro com atalho", async ({ pa
   await box.getByRole("button", { name: "Cancelar" }).click();
   await expect(box).toHaveCount(0);
 });
+
+test("drill-down: categoria → subcategorias → lançamentos filtrados, com somas que fecham", async ({ page }) => {
+  await page.goto("/dev/preview?cats=1");
+  await page.getByRole("radio", { name: "Categorias" }).click();
+  // nível 1: Transporte 165,00 · Mercado 80,00 · Sem categoria 7,00 (total 252,00)
+  await expect(page.getByRole("button", { name: "Ver subcategorias de Transporte" })).toContainText("R$ 165,00");
+  await expect(page.getByRole("button", { name: "Ver subcategorias de Mercado" })).toContainText("R$ 80,00");
+  await page.getByRole("button", { name: "Ver subcategorias de Transporte" }).click();
+  // nível 2: Gasolina 100 · Uber 50 · Sem subcategoria 15 = 165
+  const header = page.getByTestId("cat-drill-header");
+  await expect(header).toContainText("Transporte");
+  await expect(header).toContainText("R$ 165,00");
+  await expect(page.getByRole("button", { name: "Ver lançamentos de Gasolina" })).toContainText("R$ 100,00");
+  await expect(page.getByRole("button", { name: "Ver lançamentos de Uber" })).toContainText("R$ 50,00");
+  await expect(page.getByRole("button", { name: "Ver lançamentos de Sem subcategoria" })).toContainText("R$ 15,00");
+  // voltar
+  await header.getByRole("button", { name: "Voltar" }).click();
+  await expect(page.getByRole("button", { name: "Ver subcategorias de Mercado" })).toBeVisible();
+  // nível 3: abre os lançamentos com categoria e mês preservados
+  await page.getByRole("button", { name: "Ver subcategorias de Transporte" }).click();
+  await page.getByRole("button", { name: "Ver lançamentos de Uber" }).click();
+  await expect(page).toHaveURL(/lancamentos\?.*mes=2026-10.*categoria=c-uber|lancamentos\?.*categoria=c-uber.*mes=2026-10/);
+});
+
+test("drill-down: também pela tabela e em 320px sem rolagem horizontal", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/dev/preview?cats=1");
+  await page.getByRole("radio", { name: "Categorias" }).click();
+  await page.getByRole("button", { name: "Tabela" }).click();
+  await page.getByRole("button", { name: "Transporte" }).click();
+  await expect(page.getByRole("button", { name: "Uber" })).toBeVisible();
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(0);
+});
