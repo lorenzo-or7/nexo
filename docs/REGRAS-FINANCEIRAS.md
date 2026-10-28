@@ -49,6 +49,7 @@ Estas regras estão implementadas em `src/domain/` (funções puras, sem banco) 
 - Integral, parcial ou antecipado (fatura ainda aberta).
 - Restante de fatura **vencida** continua pendente na própria fatura (status *Vencida*); só vira *Paga* com restante zero, em qualquer data. Juros entram como lançamento `fee` informado.
 - Pagamento **a maior é recusado**, na tela e no banco (`pay_invoice`, migration 20261028000100): a soma dos pagamentos ativos (confirmados ou agendados, não estornados) nunca passa do devido da fatura, mesmo com pagamentos simultâneos (trava por cartão + fatura). Antecipar é pagar a fatura ainda aberta, não pagar além dela.
+- **Pagamento agendado × restante** (migration/regra única, tela e banco iguais): `Pago` e `Falta` consideram só pagamentos *confirmados*. O que ainda pode ser lançado (`payable`) é `Falta − agendados`, e é exatamente o que o banco aceita. A tela mostra o agendamento (marcado "agendado", com estorno), avisa quanto já está agendado e usa `payable` como valor padrão e limite. Fatura só vira *Paga* quando os confirmados cobrem tudo; um agendamento cobrindo o restante só esconde o botão de novo pagamento. Estornar o agendado devolve o valor.
 - Cartão e conta de pagamento precisam ser do próprio usuário (conta não arquivada); situação só *confirmed* ou *scheduled*.
 - Idempotência: a mesma chave com o mesmo pedido devolve o mesmo pagamento; a mesma chave com outro pedido, de outra operação ou de um pagamento estornado é recusada.
 
@@ -99,3 +100,9 @@ Aportes em metas (`goal_contributions`) são **reservas**, não despesas, e não
 - Nome único por nível, sem diferenciar maiúsculas (no app) e exato (no banco).
 - Filtrar pela principal inclui as subcategorias.
 - `remove_category`: sem uso, apaga (com as subcategorias); com lançamentos, compras, assinaturas, recorrências ou orçamentos, **arquiva** — some das opções, mas o histórico mantém o nome. Arquivadas podem ser restauradas; criar de novo uma arquivada com o mesmo nome a restaura.
+
+## 11. Limpeza de dados (segurança)
+
+- `clear_my_entries` e `clear_all_financial_data` são o **único** ponto de entrada. São `SECURITY DEFINER` com `search_path` fixo e identificam o usuário só por `auth.uid()` (JWT validado); sem sessão, erro. Todo comando filtra `user_id = uid`; nenhuma função recebe id de usuário.
+- A etapa final (`_wipe_finish(uuid, boolean)`: limpar a auditoria do usuário e recriar categorias padrão) **não tem EXECUTE para ninguém além do dono do banco**. Não existe mais marcador de sessão (`nexo.wiping`) para forjar (migration 20261028000200).
+- Uma chamada = uma transação (tudo ou nada); trava por usuário contra execução dupla; perfil, preferências e login (Auth) são preservados.

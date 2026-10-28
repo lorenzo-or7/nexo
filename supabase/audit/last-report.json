@@ -1,40 +1,40 @@
 {
-  "generatedAt": "2026-10-28T03:21:20.598Z",
+  "generatedAt": "2026-10-28T12:23:29.135Z",
   "results": [
     {
       "id": "M1",
       "area": "Migrations",
       "title": "Nomes no padrão do Supabase, versões únicas, em ordem estritamente crescente",
       "status": "PASS",
-      "evidence": "18 migrations, de 20261008000100 a 20261028000100: 20261008000100, 20261008000200, 20261008000300, 20261008000400, 20261009000500, 20261009000600, 20261009000700, 20261009000800, 20261009000900, 20261009001000, 20261010001100, 20261016001200, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100"
+      "evidence": "19 migrations, de 20261008000100 a 20261028000200: 20261008000100, 20261008000200, 20261008000300, 20261008000400, 20261009000500, 20261009000600, 20261009000700, 20261009000800, 20261009000900, 20261009001000, 20261010001100, 20261016001200, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100, 20261028000200"
     },
     {
       "id": "M2",
       "area": "Migrations",
       "title": "Todas aplicam em sequência num banco vazio com papéis/privilégios estilo Supabase",
       "status": "PASS",
-      "evidence": "18/18 aplicadas sem erro no PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1); 22 tabelas, 40 funções em public"
+      "evidence": "19/19 aplicadas sem erro no PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1); 22 tabelas, 40 funções em public"
     },
     {
       "id": "M3",
       "area": "Migrations",
       "title": "Reaplicar cada migration sobre o banco já migrado (quais são seguras para rodar de novo)",
       "status": "INFO",
-      "evidence": "Reaplicáveis sem erro: 20261009000600, 20261009000800, 20261010001100, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100. NÃO reexecutar (falham se já aplicadas): 20261008000100 (type \"cents\" already exists); 20261008000200 (policy \"accounts_owner\" for table \"accounts\" already exists); 20261008000300 (trigger \"on_auth_user_created\" for relation \"users\" already exists); 20261008000400 (trigger \"entries_transfer_balanced\" for relation \"account_entries\" alr); 20261009000500 (column \"institution_key\" of relation \"cards\" already exists); 20261009000700 (column \"institution_key\" of relation \"accounts\" already exists); 20261009000900 (column \"counterparty\" of relation \"account_entries\" already exists); 20261009001000 (trigger \"categories_rules\" for relation \"categories\" already exists); 20261016001200 (relation \"fixed_incomes\" already exists)"
+      "evidence": "Reaplicáveis sem erro: 20261009000600, 20261009000800, 20261010001100, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100, 20261028000200. NÃO reexecutar (falham se já aplicadas): 20261008000100 (type \"cents\" already exists); 20261008000200 (policy \"accounts_owner\" for table \"accounts\" already exists); 20261008000300 (trigger \"on_auth_user_created\" for relation \"users\" already exists); 20261008000400 (trigger \"entries_transfer_balanced\" for relation \"account_entries\" alr); 20261009000500 (column \"institution_key\" of relation \"cards\" already exists); 20261009000700 (column \"institution_key\" of relation \"accounts\" already exists); 20261009000900 (column \"counterparty\" of relation \"account_entries\" already exists); 20261009001000 (trigger \"categories_rules\" for relation \"categories\" already exists); 20261016001200 (relation \"fixed_incomes\" already exists)"
     },
     {
       "id": "M4",
       "area": "Migrations",
-      "title": "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 4 novas migrations preservam os dados",
+      "title": "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 5 novas migrations preservam os dados",
       "status": "PASS",
-      "evidence": "4 migrations novas aplicadas sobre dados existentes; contagens de 21 tabelas idênticas para os 2 usuários; remove_fixed_income = deleted_with_history"
+      "evidence": "5 migrations novas aplicadas sobre dados existentes; contagens de 21 tabelas idênticas para os 2 usuários; remove_fixed_income = deleted_with_history"
     },
     {
       "id": "M5",
       "area": "Migrations",
       "title": "Script de detecção (somente leitura) identifica corretamente quais migrations já foram aplicadas",
       "status": "PASS",
-      "evidence": "banco completo: 18/18 detectadas; banco parcial: faltam exatamente 20261027001500, 20261027001600, 20261027001700, 20261028000100"
+      "evidence": "banco completo: 19/19 detectadas; banco parcial: faltam exatamente 20261027001500, 20261027001600, 20261027001700, 20261028000100, 20261028000200"
     },
     {
       "id": "S1",
@@ -62,7 +62,7 @@
       "area": "Segurança",
       "title": "Funções SECURITY DEFINER: search_path fixo, e nenhuma aceita um id de usuário vindo do cliente",
       "status": "PASS",
-      "evidence": "8 definers: _wipe_finish[authenticated], check_transfer[interna], ensure_profile[authenticated], handle_new_user[trigger], seed_default_categories[interna], tg_audit[trigger], tg_entries_transfer[trigger], tg_transfers_row[trigger]"
+      "evidence": "9 definers: check_transfer[interna], clear_all_financial_data[authenticated], clear_my_entries[authenticated], ensure_profile[authenticated], handle_new_user[trigger], seed_default_categories[interna], tg_audit[trigger], tg_entries_transfer[trigger], tg_transfers_row[trigger]"
     },
     {
       "id": "S5",
@@ -81,9 +81,9 @@
     {
       "id": "S7",
       "area": "Segurança",
-      "title": "_wipe_finish (definer) recusa chamada direta de usuário logado e de anon",
+      "title": "_wipe_finish: nenhum papel de usuário executa (anon, authenticated, PUBLIC), nem forjando marcador ou usando o id de outro",
       "status": "PASS",
-      "evidence": "sem marcador: \"Operação não permitida\"; anon: \"permission denied for function _wipe_fin\"; com marcador forjado por Alice, o Bob permanece idêntico (impressão 14d5c570)"
+      "evidence": "assinatura única _wipe_finish(uuid,boolean), invoker, sem EXECUTE para anon/authenticated/PUBLIC; Alice com o próprio id (\"permission denied for functi\"), Alice com o id do Bob (\"permission denied for functi\"), anon (\"permission denied for functi\") e marcador forjado: todos recusados; Bob e sua auditoria (16 linhas) idênticos"
     },
     {
       "id": "S8",
@@ -125,7 +125,7 @@
       "area": "Isolamento",
       "title": "Escrita cruzada: Bob não consegue usar, alterar nem apagar nada da Alice (ids reais da Alice)",
       "status": "PASS",
-      "evidence": "21 tentativas do Bob com ids da Alice: todas recusadas; impressão da Alice inalterada (9c70e851)"
+      "evidence": "21 tentativas do Bob com ids da Alice: todas recusadas; impressão da Alice inalterada (acb4656a)"
     },
     {
       "id": "F3",
@@ -209,7 +209,7 @@
       "area": "Limpeza",
       "title": "Limpar lançamentos (Alice): zera movimentações, preserva cadastros, não toca no Bob",
       "status": "PASS",
-      "evidence": "removido: {\"entries\":28,\"purchases\":2,\"transfers\":1,\"card_charges\":6,\"subscription_charges\":0}; cadastros preservados; Bob idêntico (735a429b); marcador de recomeço gravado; auditoria dos lançamentos limpa"
+      "evidence": "removido: {\"entries\":28,\"purchases\":2,\"transfers\":1,\"card_charges\":6,\"subscription_charges\":0}; cadastros preservados; Bob idêntico (d5f903ff); marcador de recomeço gravado; auditoria dos lançamentos limpa"
     },
     {
       "id": "F10",
@@ -233,11 +233,18 @@
       "evidence": "21 tabelas verificadas dinamicamente; só restam as 42 categorias padrão; auth.users e profiles preservados (tema dark, fuso America/Sao_Paulo); a conta continua utilizável (42 categorias visíveis)"
     },
     {
+      "id": "W1",
+      "area": "Limpeza",
+      "title": "Auditoria isolada: Alice limpando tudo apaga só o histórico dela; o do Bob permanece intacto",
+      "status": "PASS",
+      "evidence": "Alice tinha 16 linhas de auditoria, Bob 39: após limpar tudo a da Alice = 0 e a do Bob idêntica (a467b2ff); clear_my_entries também não tocou no Bob"
+    },
+    {
       "id": "F13",
       "area": "Limpeza",
       "title": "Reautenticação/identidade: limpeza usa só o JWT; o Bob limpando não afeta a Alice e anon/sem sessão não limpa nada",
       "status": "PASS",
-      "evidence": "assinaturas sem parâmetro de usuário (export_my_data(); clear_my_entries(date); clear_all_financial_data()); anon e JWT sem sub recusados; Bob limpou a própria conta e a Alice permaneceu idêntica (b5481f92)"
+      "evidence": "assinaturas sem parâmetro de usuário (export_my_data(); clear_my_entries(date); clear_all_financial_data()); anon e JWT sem sub recusados; Bob limpou a própria conta e a Alice permaneceu idêntica (692bc42c)"
     },
     {
       "id": "R1",

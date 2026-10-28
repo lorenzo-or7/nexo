@@ -718,6 +718,22 @@ describe("pagamento de fatura: guarda no banco (migration 20261028000100)", () =
     await expect(pay(ALICE, s2.card, s2.acc, 1, "s-2")).rejects.toThrow(/já está quitada/);
   });
 
+  it("agendado: reduz o que ainda pode ser pago (igual à tela), estorno libera, estorno duplo é recusado", async () => {
+    const { acc, card } = await setup(ALICE);
+    const s1 = await pay(ALICE, card, acc, 4000, "sc-1", "2026-10", "scheduled");
+    await expect(pay(ALICE, card, acc, 6001, "sc-2")).rejects.toThrow(/passa do que falta/);
+    const s2 = await pay(ALICE, card, acc, 6000, "sc-3");
+    await expect(pay(ALICE, card, acc, 1, "sc-4")).rejects.toThrow(/já está quitada/);
+    // estornar o agendado libera exatamente o valor dele, e nada além disso
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [s1.id]));
+    await expect(as(ALICE, () => q(`select reverse_invoice_payment($1)`, [s1.id]))).rejects.toThrow(/já estornado/);
+    await expect(pay(ALICE, card, acc, 4001, "sc-5")).rejects.toThrow(/passa do que falta/);
+    await pay(ALICE, card, acc, 4000, "sc-6");
+    expect(s2.id).toBeTruthy();
+    // Bob não estorna o pagamento da Alice
+    await expect(as(BOB, () => q(`select reverse_invoice_payment($1)`, [s2.id]))).rejects.toThrow(/não encontrado/);
+  });
+
   it("propriedade: cartão e conta de outro usuário (ou arquivada) são recusados", async () => {
     const a = await setup(ALICE);
     const b = await setup(BOB);
@@ -855,8 +871,10 @@ describe("gerenciamento de dados: exportar, limpar lançamentos, limpar tudo", (
     expect(orphans).toHaveLength(0);
   });
 
-  it("a etapa final só roda dentro da limpeza e exige login", async () => {
-    await expect(as(CAROL, () => q(`select _wipe_finish(true)`))).rejects.toThrow(/não permitida/);
+  it("a etapa final não é executável por usuários e a limpeza exige login", async () => {
+    await expect(as(CAROL, () => q(`select _wipe_finish($1, true)`, [CAROL]))).rejects.toThrow(/permission denied/);
+    await expect(as(CAROL, () => q(`select _wipe_finish($1, true)`, [BOB]))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => q(`select _wipe_finish($1, true)`, [BOB]))).rejects.toThrow(/permission denied/);
     await expect(as(null, () => q(`select clear_all_financial_data()`))).rejects.toThrow();
     await expect(as(null, () => q(`select clear_my_entries('2026-10-27')`))).rejects.toThrow();
   });

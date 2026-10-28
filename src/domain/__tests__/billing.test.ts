@@ -196,3 +196,32 @@ describe("limite do cartão", () => {
     expect(availableLimit(nubank, 500000, parts, [pay("2026-10", 10000)], "2026-10-19").available).toBe(390000);
   });
 });
+
+describe("pagamento agendado × restante da fatura (mesma regra do banco)", () => {
+  const sched = (ref: string, amount: number): CardPayment => ({ ...pay(ref, amount, "2026-10-25"), status: "scheduled" });
+  it("agendado não reduz 'pago' nem 'falta', mas reduz o que ainda pode ser pago", () => {
+    const [inv] = computeInvoices(nubank, [charge("2026-10", 100000)], [pay("2026-10", 40000), sched("2026-10", 30000)], "2026-10-19");
+    expect(inv.paid).toBe(40000);
+    expect(inv.remaining).toBe(60000);
+    expect(inv.scheduled).toBe(30000);
+    expect(inv.payable).toBe(30000);
+    expect(inv.status).toBe("closed");
+  });
+  it("agendamento cobrindo todo o restante: payable = 0, e a fatura ainda não está paga", () => {
+    const [inv] = computeInvoices(nubank, [charge("2026-10", 50000)], [sched("2026-10", 50000)], "2026-10-19");
+    expect(inv.remaining).toBe(50000);
+    expect(inv.payable).toBe(0);
+    expect(inv.status).not.toBe("paid");
+  });
+  it("sem agendados, payable = remaining; confirmado e agendado de outra fatura não interferem", () => {
+    const inv = computeInvoices(nubank, [charge("2026-10", 20000), charge("2026-11", 10000)], [sched("2026-11", 10000)], "2026-10-19");
+    const oct = inv.find((i) => i.ref === "2026-10")!;
+    expect(oct.payable).toBe(oct.remaining);
+    expect(inv.find((i) => i.ref === "2026-11")!.payable).toBe(0);
+  });
+  it("payable nunca fica negativo nem passa do restante", () => {
+    const [inv] = computeInvoices(nubank, [charge("2026-10", 10000)], [pay("2026-10", 10000), sched("2026-10", 5000)], "2026-10-19");
+    expect(inv.remaining).toBe(0);
+    expect(inv.payable).toBe(0);
+  });
+});

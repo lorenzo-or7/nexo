@@ -33,7 +33,7 @@ function PayDialog({
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [state, action, pending] = useActionState<CardActionResult, FormData>(payInvoice, undefined);
-  const [amount, setAmount] = useState(formatBRL(invoice.remaining));
+  const [amount, setAmount] = useState(formatBRL(invoice.payable));
   const toast = useToast();
   const id = useId();
   useEffect(() => {
@@ -44,8 +44,8 @@ function PayDialog({
     }
   }, [state, toast]);
   useEffect(() => {
-    if (open) setAmount(formatBRL(invoice.remaining));
-  }, [open, invoice.remaining]);
+    if (open) setAmount(formatBRL(invoice.payable));
+  }, [open, invoice.payable]);
   const first = accounts.find((a) => a.id === defaultAccountId)?.id ?? accounts[0]?.id ?? "";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -63,8 +63,13 @@ function PayDialog({
             <div><dt className="text-ink-3">Já pago</dt><dd className="font-medium"><Money value={invoice.paid} /></dd></div>
             <div><dt className="text-ink-3">Falta pagar</dt><dd className="font-semibold"><Money value={invoice.remaining} /></dd></div>
           </dl>
+          {invoice.scheduled > 0 && (
+            <p className="text-sm text-ink-2" data-testid="scheduled-note">
+              Já há <Money value={invoice.scheduled} /> agendado para esta fatura. Você ainda pode lançar até <Money value={invoice.payable} />.
+            </p>
+          )}
           <Field label="Valor a pagar" htmlFor={`${id}-amount`} error={state && !state.ok && state.field === "amount" ? state.error : undefined}
-            hint={<button type="button" className="text-sm text-accent underline-offset-2 hover:underline" onClick={() => setAmount(formatBRL(invoice.remaining))}>Pagar tudo</button>}>
+            hint={<button type="button" className="text-sm text-accent underline-offset-2 hover:underline" onClick={() => setAmount(formatBRL(invoice.payable))}>Pagar tudo</button>}>
             <MoneyInput id={`${id}-amount`} name="amount" value={amount} onValueChange={setAmount} required />
           </Field>
           <Field label="Conta usada" htmlFor={`${id}-acc`}>
@@ -143,13 +148,16 @@ export function InvoiceList({
             <ul className="grid gap-1 text-sm text-ink-2">
               {i.payments.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{formatDateBR(p.date)} · {p.accountName} · <Money value={p.amount} /></span>
+                  <span>{formatDateBR(p.date)} · {p.accountName} · <Money value={p.amount} />{p.scheduled && " · agendado"}</span>
                   <ReverseButton id={p.id} amount={p.amount} />
                 </li>
               ))}
             </ul>
           )}
-          {i.remaining > 0 && (
+          {i.remaining > 0 && i.payable <= 0 && (
+            <p className="text-sm text-ink-2" data-testid="fully-scheduled">Falta pagar coberto por pagamento agendado.</p>
+          )}
+          {i.payable > 0 && (
             <div className="flex justify-end">
               <PayDialog cardId={cardId} cardName={cardName} invoice={i} accounts={accounts} defaultAccountId={defaultAccountId} today={today} />
             </div>

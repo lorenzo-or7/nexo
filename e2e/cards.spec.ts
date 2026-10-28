@@ -60,3 +60,24 @@ test("faturas: sem rolagem horizontal no celular", async ({ page }) => {
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(over).toBeLessThanOrEqual(0);
 });
+
+test("faturas: pagamento agendado reduz o que ainda pode ser pago (mesma regra do banco)", async ({ page }) => {
+  await page.goto("/dev/preview/cartoes?agendado=1");
+  const row = page.getByTestId("invoice-row").first();
+  await expect(row).toContainText("R$ 814,88"); // falta (só confirmados)
+  await expect(row).toContainText("agendado"); // o agendamento aparece na lista de pagamentos
+  await row.getByRole("button", { name: "Registrar pagamento" }).click();
+  const dlg = page.getByRole("dialog", { name: "Registrar pagamento" });
+  await expect(dlg.getByTestId("scheduled-note")).toContainText("R$ 300,00");
+  await expect(dlg.getByTestId("scheduled-note")).toContainText("R$ 514,88");
+  await expect(dlg.getByLabel("Valor a pagar")).toHaveValue("R$ 514,88"); // padrão = o que ainda cabe
+  await dlg.getByLabel("Valor a pagar").fill("600,00");
+  await dlg.getByRole("button", { name: "Pagar tudo" }).click();
+  await expect(dlg.getByLabel("Valor a pagar")).toHaveValue("R$ 514,88");
+});
+
+test("faturas: sem agendamento a tela não muda (sem aviso)", async ({ page }) => {
+  await page.goto("/dev/preview/cartoes");
+  await page.getByTestId("invoice-row").first().getByRole("button", { name: "Registrar pagamento" }).click();
+  await expect(page.getByRole("dialog", { name: "Registrar pagamento" }).getByTestId("scheduled-note")).toHaveCount(0);
+});

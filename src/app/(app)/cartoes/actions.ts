@@ -183,7 +183,10 @@ export async function payInvoice(_: CardActionResult, form: FormData): Promise<C
   const inv = cards.find((c) => c.id === parsed.data.card_id)?.invoices.find((i) => i.ref === parsed.data.invoice_ref);
   if (!inv) return { ok: false, error: "Fatura não encontrada" };
   if (inv.remaining <= 0) return { ok: false, error: "Esta fatura já está quitada" };
-  if (amount > inv.remaining) return { ok: false, error: `O valor passa do que falta pagar (${formatBRL(inv.remaining)})`, field: "amount" };
+  if (inv.payable <= 0) return { ok: false, error: "O que falta desta fatura já está coberto por pagamento agendado. Estorne o agendamento para lançar outro." };
+  if (amount > inv.payable) {
+    return { ok: false, error: inv.scheduled > 0 ? `O valor passa do que ainda pode ser pago (${formatBRL(inv.payable)}), já descontado o pagamento agendado` : `O valor passa do que falta pagar (${formatBRL(inv.payable)})`, field: "amount" };
+  }
   const status = parsed.data.date > todayIn(profile.timezone) ? "scheduled" : "confirmed";
   const { error } = await supabase.rpc("pay_invoice", {
     p_card: parsed.data.card_id,
@@ -204,8 +207,8 @@ export async function payInvoice(_: CardActionResult, form: FormData): Promise<C
     return { ok: false, error: "Não foi possível registrar o pagamento" };
   }
   revalidatePath("/", "layout");
-  const left = inv.remaining - amount;
-  return { ok: true, message: left === 0 ? "Fatura quitada." : `Pagamento registrado. Ainda faltam ${formatBRL(left as Cents)}.` };
+  const left = inv.payable - amount;
+  return { ok: true, message: left === 0 ? (status === "scheduled" || inv.scheduled > 0 ? "Pagamento agendado: a fatura será quitada." : "Fatura quitada.") : `Pagamento registrado. Ainda faltam ${formatBRL(left as Cents)}.` };
 }
 
 export async function reverseInvoicePayment(_: CardActionResult, form: FormData): Promise<CardActionResult> {

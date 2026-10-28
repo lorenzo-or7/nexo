@@ -21,6 +21,7 @@ Saída: tabela PASS / FAIL / WARN / INFO e `last-report.json`. Código de saída
 | `bootstrap.sql` | cria papéis, `auth`, `storage` e privilégios padrão como no Supabase |
 | `run-audit.mjs` | as verificações (migrations, segurança, dois usuários, concorrência) |
 | `verificar-migrations.sql` | **somente leitura**: diz quais migrations já estão aplicadas (pode rodar em produção) |
+| `verificar-seguranca.sql` | **somente leitura**: 10 verificações de privilégio/RLS/funções definer após aplicar as migrations (tudo deve dar `true`) |
 | `opcional/endurecimento.sql` | **opcional, não é migration e nunca é aplicado automaticamente**: revoga privilégios sobrando (TRUNCATE/REFERENCES/TRIGGER) e execução de gatilhos por anon. Testado em S11 |
 
 O que **não** dá para provar aqui: o painel/Auth reais do seu projeto (política de senha, SMTP, rate limit),

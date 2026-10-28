@@ -222,7 +222,7 @@ async function sectionMigrations() {
     return { status: "INFO", evidence: `Reaplicáveis sem erro: ${safe.join(", ") || "nenhuma"}. NÃO reexecutar (falham se já aplicadas): ${unsafe.join("; ") || "nenhuma"}` };
   });
 
-  await check("M4", "Migrations", "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 4 novas migrations preservam os dados", async () => {
+  await check("M4", "Migrations", "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 5 novas migrations preservam os dados", async () => {
     const baseline = "20261017001400_fixed_bills.sql";
     const pre = await freshDb("nexo_audit_upg", baseline);
     assert(pre.length === files.indexOf(baseline) + 1, "baseline errado");
@@ -323,7 +323,7 @@ async function sectionSecurity() {
     // as únicas que usuários logados podem chamar diretamente devem usar auth.uid() internamente e ter guarda
     const src = {};
     for (const f of callable) src[f.proname] = (await c.query(`select pg_get_functiondef($1::regprocedure) as d`, [f.sig])).rows[0].d;
-    for (const [name, def] of Object.entries(src)) assert(/auth\.uid\(\)/.test(def), `${name} não usa auth.uid()`);
+    for (const [name, def] of Object.entries(src)) assert(/auth\.uid\(\)|require_user\(\)/.test(def), `${name} não deriva o usuário do JWT (auth.uid/require_user)`);
     return `${d.length} definers: ${d.map((x) => `${x.proname}[${x.ret === "trigger" ? "trigger" : x.auth ? "authenticated" : "interna"}]`).join(", ")}`;
   });
 
@@ -334,7 +334,7 @@ async function sectionSecurity() {
     const rpcs = f.filter((x) => x.ret !== "trigger" && !["require_user", "fixed_income_date"].includes(x.proname) && !x.proname.startsWith("tg_"));
     const exposed = rpcs.filter((x) => x.anon);
     assert(exposed.length === 0, `RPC executável por anon: ${exposed.map((x) => x.sig)}`);
-    const noAuth = rpcs.filter((x) => !x.auth && !["check_transfer", "seed_default_categories"].includes(x.proname));
+    const noAuth = rpcs.filter((x) => !x.auth && !["check_transfer", "seed_default_categories", "_wipe_finish"].includes(x.proname));
     assert(noAuth.length === 0, `RPC sem acesso para authenticated: ${noAuth.map((x) => x.sig)}`);
     const helpers = f.filter((x) => x.anon && !rpcs.includes(x)).map((x) => x.proname);
     return {
@@ -351,22 +351,35 @@ async function sectionSecurity() {
     return msgs.join(" | ");
   });
 
-  await check("S7", "Segurança", "_wipe_finish (definer) recusa chamada direta de usuário logado e de anon", async () => {
+  await check("S7", "Segurança", "_wipe_finish: nenhum papel de usuário executa (anon, authenticated, PUBLIC), nem forjando marcador ou usando o id de outro", async () => {
     const s = await seed(api, ALICE, "S");
     await seed(api, BOB, "S");
     const tables = await userTables(c);
     const fpB = await fingerprint(c, BOB, tables);
-    const m1 = await api.fails(ALICE, `select public._wipe_finish(true)`, [], /não permitida|42501|Operação/i);
-    const m2 = await api.fails(null, `select public._wipe_finish(true)`, [], /permission denied|permissão/i);
-    // mesmo que o usuário consiga ligar o marcador (só seria possível com SQL direto), o efeito é restrito a ele
+    const auditB = (await c.query(`select count(*)::int n from public.audit_log where user_id = $1`, [BOB])).rows[0].n;
+    assert(auditB > 0, "Bob sem auditoria para proteger");
+    const ov = (await c.query(`select p.oid::regprocedure::text sig, p.prosecdef,
+        has_function_privilege('anon', p.oid, 'execute') anon, has_function_privilege('authenticated', p.oid, 'execute') auth,
+        has_function_privilege('public', p.oid, 'execute') pub from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = '_wipe_finish'`)).rows;
+    assert(ov.length === 1 && ov[0].sig === "_wipe_finish(uuid,boolean)", `sobrecargas inesperadas: ${ov.map((x) => x.sig)}`);
+    assert(!ov[0].anon && !ov[0].auth && !ov[0].pub, "algum papel de usuário ainda executa _wipe_finish");
+    assert(ov[0].prosecdef === false, "_wipe_finish não deveria ser definer");
+    const m1 = await api.fails(ALICE, `select public._wipe_finish($1, true)`, [ALICE], /permission denied/i);
+    const m2 = await api.fails(ALICE, `select public._wipe_finish($1, true)`, [BOB], /permission denied/i);
+    const m3 = await api.fails(null, `select public._wipe_finish($1, true)`, [BOB], /permission denied/i);
+    // marcador de sessão forjado não muda nada (nem existe mais): continua sem permissão
     await api.as(ALICE, async (cl) => {
       await cl.query(`select set_config('nexo.wiping','1',true)`);
-      await cl.query(`select public._wipe_finish(false)`);
+      let failed = false;
+      try { await cl.query(`select public._wipe_finish($1, false)`, [BOB]); } catch { failed = true; }
+      assert(failed, "executou com marcador forjado");
     });
     const fpB2 = await fingerprint(c, BOB, tables);
+    const auditB2 = (await c.query(`select count(*)::int n from public.audit_log where user_id = $1`, [BOB])).rows[0].n;
     assert(JSON.stringify(fpB) === JSON.stringify(fpB2), "dados do Bob mudaram");
+    assert(auditB === auditB2, "auditoria do Bob mudou");
     assert(s.acc, "seed");
-    return `sem marcador: "${m1.slice(0, 40)}"; anon: "${m2.slice(0, 40)}"; com marcador forjado por Alice, o Bob permanece idêntico (impressão ${sha(fpB).slice(0, 8)})`;
+    return `assinatura única _wipe_finish(uuid,boolean), invoker, sem EXECUTE para anon/authenticated/PUBLIC; Alice com o próprio id ("${m1.slice(0, 28)}"), Alice com o id do Bob ("${m2.slice(0, 28)}"), anon ("${m3.slice(0, 28)}") e marcador forjado: todos recusados; Bob e sua auditoria (${auditB} linhas) idênticos`;
   });
 
   await check("S8", "Segurança", "seed_default_categories(uuid) (definer) não é executável por usuários (impede criar categorias na conta de outro)", async () => {
@@ -735,6 +748,24 @@ async function sectionFunctional() {
     assert(prof && prof.theme && prof.timezone, "perfil perdido");
     const cats = await api.q(ALICE, `select count(*)::int n from categories`);
     return `${tables.length} tabelas verificadas dinamicamente; só restam as ${aliceCats} categorias padrão; auth.users e profiles preservados (tema ${prof.theme}, fuso ${prof.timezone}); a conta continua utilizável (${cats[0].n} categorias visíveis)`;
+  });
+
+  await check("W1", "Limpeza", "Auditoria isolada: Alice limpando tudo apaga só o histórico dela; o do Bob permanece intacto", async () => {
+    await seed(api, BOB, "W");
+    await seed(api, ALICE, "W");
+    const cnt = async (u) => (await c.query(`select count(*)::int n from public.audit_log where user_id = $1`, [u])).rows[0].n;
+    const hash = async (u) => sha((await c.query(`select coalesce(jsonb_agg(to_jsonb(a) order by to_jsonb(a)::text), '[]') j from public.audit_log a where user_id = $1`, [u])).rows[0].j);
+    const [nb, na, hb] = [await cnt(BOB), await cnt(ALICE), await hash(BOB)];
+    assert(nb > 0 && na > 0, `sem auditoria para testar (Bob ${nb}, Alice ${na})`);
+    await api.one(ALICE, `select clear_all_financial_data() as r`);
+    assert((await cnt(ALICE)) === 0, "auditoria da Alice não foi limpa");
+    assert((await cnt(BOB)) === nb && (await hash(BOB)) === hb, "auditoria do Bob mudou");
+    // limpeza só de lançamentos: apaga auditoria de lançamentos do próprio usuário, não a do outro
+    await seed(api, ALICE, "W3");
+    const hb2 = await hash(BOB);
+    await api.one(ALICE, `select clear_my_entries('2026-10-27') as r`);
+    assert((await hash(BOB)) === hb2, "auditoria do Bob mudou após clear_my_entries da Alice");
+    return `Alice tinha ${na} linhas de auditoria, Bob ${nb}: após limpar tudo a da Alice = 0 e a do Bob idêntica (${hb.slice(0, 8)}); clear_my_entries também não tocou no Bob`;
   });
 
   await check("F13", "Limpeza", "Reautenticação/identidade: limpeza usa só o JWT; o Bob limpando não afeta a Alice e anon/sem sessão não limpa nada", async () => {

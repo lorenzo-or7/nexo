@@ -200,8 +200,12 @@ export interface InvoiceSummary {
   carriedIn: Cents;
   total: Cents;
   paid: Cents;
-  /** quanto ainda falta pagar (>= 0); excedente vira crédito na próxima */
+  /** quanto ainda falta pagar (>= 0); excedente vira crédito na próxima. Só pagamentos CONFIRMADOS reduzem. */
   remaining: Cents;
+  /** soma dos pagamentos AGENDADOS (data futura) ainda não realizados desta fatura */
+  scheduled: Cents;
+  /** quanto ainda pode ser lançado como novo pagamento: remaining − agendados (>= 0). É a mesma regra do banco. */
+  payable: Cents;
   /** quanto foi levado para a próxima fatura */
   carriedOut: Cents;
   status: InvoiceStatus;
@@ -209,7 +213,8 @@ export interface InvoiceSummary {
 
 /**
  * Calcula todas as faturas de um cartão de `fromRef` a `toRef`.
- * Pagamentos só contam como confirmados. Pagamento a maior vira crédito na
+ * `paid`/`remaining` só contam pagamentos confirmados; os agendados aparecem em `scheduled` e reduzem só `payable`
+ * (o que ainda pode ser lançado), igual à guarda do banco. Pagamento a maior vira crédito na
  * fatura seguinte. Saldo não pago de fatura VENCIDA continua pendente na
  * própria fatura (status "overdue"); juros entram como lançamento "fee"
  * informado pelo usuário.
@@ -223,6 +228,7 @@ export function computeInvoices(
 ): InvoiceSummary[] {
   const live = charges.filter((x) => !x.cancelled);
   const paidPayments = payments.filter((p) => (p.status ?? "confirmed") === "confirmed");
+  const scheduledPayments = payments.filter((p) => p.status === "scheduled");
   const refs = [...live.map((x) => x.invoiceRef), ...paidPayments.map((p) => p.invoiceRef)].sort();
   const firstRef = range?.fromRef && (!refs[0] || range.fromRef < refs[0]) ? range.fromRef : refs[0];
   const lastRef = range?.toRef && (!refs.at(-1) || range.toRef > refs.at(-1)!) ? range.toRef : refs.at(-1);
@@ -234,6 +240,7 @@ export function computeInvoices(
     const { closingDate, dueDate } = invoicePeriod(c, ref);
     const ch = sum(live.filter((x) => x.invoiceRef === ref).map((x) => x.amount));
     const paid = sum(paidPayments.filter((p) => p.invoiceRef === ref).map((p) => p.amount));
+    const scheduled = sum(scheduledPayments.filter((p) => p.invoiceRef === ref).map((p) => p.amount));
     const total = ch + carry;
     const balance = total - paid;
     const isClosed = compareDates(today, closingDate) >= 0;
@@ -269,6 +276,8 @@ export function computeInvoices(
       total: total as Cents,
       paid,
       remaining: remaining as Cents,
+      scheduled: scheduled as Cents,
+      payable: Math.max(0, remaining - scheduled) as Cents,
       carriedOut: carriedOut as Cents,
       status,
     });
