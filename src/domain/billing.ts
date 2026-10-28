@@ -91,6 +91,8 @@ export interface CardCharge {
   kind: ChargeKind;
   cancelled?: boolean;
   hypothetical?: boolean;
+  /** cobrança PREVISTA (assinatura futura): entra na fatura prevista, mas ainda não é consumo realizado */
+  projected?: boolean;
   /** categoria da compra (vem da compra, não da parcela) */
   categoryId?: string | null;
 }

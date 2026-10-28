@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-10-28T03:03:31.184Z",
+  "results": [
+    {
+      "id": "M1",
+      "area": "Migrations",
+      "title": "Nomes no padrão do Supabase, versões únicas, em ordem estritamente crescente",
+      "status": "PASS",
+      "evidence": "17 migrations, de 20261008000100 a 20261027001700: 20261008000100, 20261008000200, 20261008000300, 20261008000400, 20261009000500, 20261009000600, 20261009000700, 20261009000800, 20261009000900, 20261009001000, 20261010001100, 20261016001200, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700"
+    },
+    {
+      "id": "M2",
+      "area": "Migrations",
+      "title": "Todas aplicam em sequência num banco vazio com papéis/privilégios estilo Supabase",
+      "status": "PASS",
+      "evidence": "17/17 aplicadas sem erro no PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1); 22 tabelas, 40 funções em public"
+    },
+    {
+      "id": "M3",
+      "area": "Migrations",
+      "title": "Reaplicar cada migration sobre o banco já migrado (quais são seguras para rodar de novo)",
+      "status": "INFO",
+      "evidence": "Reaplicáveis sem erro: 20261009000600, 20261009000800, 20261010001100, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700. NÃO reexecutar (falham se já aplicadas): 20261008000100 (type \"cents\" already exists); 20261008000200 (policy \"accounts_owner\" for table \"accounts\" already exists); 20261008000300 (trigger \"on_auth_user_created\" for relation \"users\" already exists); 20261008000400 (trigger \"entries_transfer_balanced\" for relation \"account_entries\" alr); 20261009000500 (column \"institution_key\" of relation \"cards\" already exists); 20261009000700 (column \"institution_key\" of relation \"accounts\" already exists); 20261009000900 (column \"counterparty\" of relation \"account_entries\" already exists); 20261009001000 (trigger \"categories_rules\" for relation \"categories\" already exists); 20261016001200 (relation \"fixed_incomes\" already exists)"
+    },
+    {
+      "id": "M4",
+      "area": "Migrations",
+      "title": "Atualização com dados reais-fictícios: estado anterior (até 20261017001400) + 3 novas migrations preservam os dados",
+      "status": "PASS",
+      "evidence": "3 migrations novas aplicadas sobre dados existentes; contagens de 21 tabelas idênticas para os 2 usuários; remove_fixed_income = deleted_with_history"
+    },
+    {
+      "id": "M5",
+      "area": "Migrations",
+      "title": "Script de detecção (somente leitura) identifica corretamente quais migrations já foram aplicadas",
+      "status": "PASS",
+      "evidence": "banco completo: 17/17 detectadas; banco parcial: faltam exatamente 20261027001500, 20261027001600, 20261027001700"
+    },
+    {
+      "id": "S1",
+      "area": "Segurança",
+      "title": "RLS ligada em todas as tabelas de public e nenhuma política 'aberta' (using true)",
+      "status": "PASS",
+      "evidence": "22 tabelas com RLS, 23 políticas, todas restritas a authenticated e filtrando por auth.uid()"
+    },
+    {
+      "id": "S2",
+      "area": "Segurança",
+      "title": "anon não tem nenhum privilégio em tabelas/views de public",
+      "status": "PASS",
+      "evidence": "0 privilégios de anon em 24 relações"
+    },
+    {
+      "id": "S3",
+      "area": "Segurança",
+      "title": "Views usam security_invoker (RLS do usuário continua valendo)",
+      "status": "PASS",
+      "evidence": "views: invoice_payments, account_balances"
+    },
+    {
+      "id": "S4",
+      "area": "Segurança",
+      "title": "Funções SECURITY DEFINER: search_path fixo, e nenhuma aceita um id de usuário vindo do cliente",
+      "status": "PASS",
+      "evidence": "8 definers: _wipe_finish[authenticated], check_transfer[interna], ensure_profile[authenticated], handle_new_user[trigger], seed_default_categories[interna], tg_audit[trigger], tg_entries_transfer[trigger], tg_transfers_row[trigger]"
+    },
+    {
+      "id": "S5",
+      "area": "Segurança",
+      "title": "Permissão EXECUTE: nenhuma RPC de negócio é executável por anon/PUBLIC; todas são por authenticated",
+      "status": "WARN",
+      "evidence": "31 RPCs de negócio: 0 para anon. Auxiliares/gatilhos ainda executáveis por anon/PUBLIC (privilégio padrão do Postgres; sem efeito, pois exigem contexto de gatilho ou sessão): fixed_income_date, handle_new_user, require_user, tg_audit, tg_category_kind_cascade, tg_category_rules, tg_entries_transfer, tg_touch, tg_transfers_row. Recomendação: revogar (ver opcional/endurecimento.sql)."
+    },
+    {
+      "id": "S6",
+      "area": "Segurança",
+      "title": "Gatilhos SECURITY DEFINER não podem ser chamados diretamente como função",
+      "status": "PASS",
+      "evidence": "handle_new_user: trigger functions can only be called as triggers | tg_audit: trigger functions can only be called as triggers | tg_entries_transfer: trigger functions can only be called as triggers | tg_transfers_row: trigger functions can only be called as triggers"
+    },
+    {
+      "id": "S7",
+      "area": "Segurança",
+      "title": "_wipe_finish (definer) recusa chamada direta de usuário logado e de anon",
+      "status": "PASS",
+      "evidence": "sem marcador: \"Operação não permitida\"; anon: \"permission denied for function _wipe_fin\"; com marcador forjado por Alice, o Bob permanece idêntico (impressão 80d8724b)"
+    },
+    {
+      "id": "S8",
+      "area": "Segurança",
+      "title": "seed_default_categories(uuid) (definer) não é executável por usuários (impede criar categorias na conta de outro)",
+      "status": "PASS",
+      "evidence": "permission denied for function seed_default_categories"
+    },
+    {
+      "id": "S9",
+      "area": "Segurança",
+      "title": "authenticated não consegue forjar nem alterar a auditoria (audit_log)",
+      "status": "PASS",
+      "evidence": "insert negado; update e delete afetam 0 linhas (RLS só permite SELECT)"
+    },
+    {
+      "id": "S10",
+      "area": "Segurança",
+      "title": "Privilégios de tabela além do necessário para authenticated (TRUNCATE/REFERENCES/TRIGGER)",
+      "status": "WARN",
+      "evidence": "22 tabelas concedem trigger/references/truncate a authenticated (privilégio padrão do Supabase: ALTER DEFAULT PRIVILEGES ... GRANT ALL). Não é alcançável pela API REST (não existe verbo TRUNCATE) e RLS cobre select/insert/update/delete, mas TRUNCATE ignora RLS se alguém obtiver SQL direto. Recomendação: opcional/endurecimento.sql."
+    },
+    {
+      "id": "S11",
+      "area": "Segurança",
+      "title": "Endurecimento opcional (revogar extras) não quebra nada: RPCs principais continuam funcionando",
+      "status": "PASS",
+      "evidence": "extras revogados (0 restantes); seed completo, pay_invoice, export_my_data e clear_my_entries OK no banco endurecido"
+    },
+    {
+      "id": "F1",
+      "area": "Isolamento",
+      "title": "Leitura: cada usuário vê exatamente as próprias linhas em todas as tabelas e views",
+      "status": "PASS",
+      "evidence": "21 tabelas + 2 views: 0 linhas de outro usuário visíveis (A:83 linhas, B:83)"
+    },
+    {
+      "id": "F2",
+      "area": "Isolamento",
+      "title": "Escrita cruzada: Bob não consegue usar, alterar nem apagar nada da Alice (ids reais da Alice)",
+      "status": "PASS",
+      "evidence": "21 tentativas do Bob com ids da Alice: todas recusadas; impressão da Alice inalterada (a750a5e9)"
+    },
+    {
+      "id": "F3",
+      "area": "Pagamento de fatura",
+      "title": "Pagamento parcial e total: não é despesa de consumo, reduz o saldo da conta e é idempotente",
+      "status": "PASS",
+      "evidence": "saldo da conta caiu exatamente 10000 (4000+6000); consumo (despesas) inalterado em 2500; chave repetida devolveu o mesmo id"
+    },
+    {
+      "id": "F4",
+      "area": "Pagamento de fatura",
+      "title": "Estorno: devolve o saldo, é auditável, não repete e só o dono consegue",
+      "status": "PASS",
+      "evidence": "saldo +6000; 2º estorno recusado; Bob recusado; linha preservada (deleted_at) com 2 registros de auditoria; novo pagamento aceito"
+    },
+    {
+      "id": "F5",
+      "area": "Pagamento de fatura",
+      "title": "Concorrência: 8 requisições simultâneas com a mesma chave criam 1 único pagamento",
+      "status": "PASS",
+      "evidence": "8 chamadas paralelas → 1 linha, mesmo id para todas"
+    },
+    {
+      "id": "F6",
+      "area": "Pagamento de fatura",
+      "title": "Pagamento acima do que falta na fatura é recusado pelo BANCO (não só pela tela)",
+      "status": "FAIL",
+      "evidence": "fatura de 10000 recebeu 20000 (5 de 5 aceitos); pagamento de 999.999,99: aceito"
+    },
+    {
+      "id": "F7",
+      "area": "Renda fixa",
+      "title": "Excluir renda fixa: some e nunca volta; histórico confirmado preservado; Bob intacto",
+      "status": "PASS",
+      "evidence": "com confirmado → deleted_with_history (1 confirmado mantido, 2 previstos removidos); sem confirmado → deleted (linha apagada); reaparecer/relançar recusado; Bob idêntico"
+    },
+    {
+      "id": "F8",
+      "area": "Exportação",
+      "title": "export_my_data: só dados do próprio usuário, sem segredos, e anon não exporta",
+      "status": "PASS",
+      "evidence": "20 seções; todos os user_id = Alice; Bob e Alice trocados: 0 vazamentos; anon recusado"
+    },
+    {
+      "id": "F9",
+      "area": "Limpeza",
+      "title": "Limpar lançamentos (Alice): zera movimentações, preserva cadastros, não toca no Bob",
+      "status": "PASS",
+      "evidence": "removido: {\"entries\":14,\"purchases\":1,\"transfers\":1,\"card_charges\":3,\"subscription_charges\":0}; cadastros preservados; Bob idêntico (69c03379); marcador de recomeço gravado; auditoria dos lançamentos limpa"
+    },
+    {
+      "id": "F10",
+      "area": "Limpeza",
+      "title": "Atomicidade: se um passo da limpeza total falha, NADA é apagado",
+      "status": "PASS",
+      "evidence": "erro \"falha injetada\" no meio das duas funções → 22 tabelas da Alice e do Bob idênticas (rollback total)"
+    },
+    {
+      "id": "F11",
+      "area": "Limpeza",
+      "title": "Limpar tudo: execução dupla simultânea é segura (sem deadlock, sem estado parcial, sem tocar no Bob)",
+      "status": "PASS",
+      "evidence": "2 execuções simultâneas concluídas sem erro (advisory lock por usuário); Bob idêntico"
+    },
+    {
+      "id": "F12",
+      "area": "Limpeza",
+      "title": "Limpar tudo: não sobra NENHUM dado financeiro da Alice em nenhuma tabela; login e preferências ficam",
+      "status": "PASS",
+      "evidence": "21 tabelas verificadas dinamicamente; só restam as 42 categorias padrão; auth.users e profiles preservados (tema dark, fuso America/Sao_Paulo); a conta continua utilizável (42 categorias visíveis)"
+    },
+    {
+      "id": "F13",
+      "area": "Limpeza",
+      "title": "Reautenticação/identidade: limpeza usa só o JWT; o Bob limpando não afeta a Alice e anon/sem sessão não limpa nada",
+      "status": "PASS",
+      "evidence": "assinaturas sem parâmetro de usuário (export_my_data(); clear_my_entries(date); clear_all_financial_data()); anon e JWT sem sub recusados; Bob limpou a própria conta e a Alice permaneceu idêntica (fb0f02ab)"
+    },
+    {
+      "id": "R1",
+      "area": "Reconciliação",
+      "title": "Compra parcelada estornada: Lançamentos (parcelas ativas) + estornos = consumo do gráfico, no banco real",
+      "status": "PASS",
+      "evidence": "valor cheio da compra 30.000 (o que Lançamentos mostrava) → parcelas ativas 20.000 − estorno 10.000 = 10.000, idêntico ao total do cartão no gráfico, também por categoria"
+    },
+    {
+      "id": "O1",
+      "area": "Pagamento de fatura",
+      "title": "Com opcional/pay_invoice_guard.sql: excesso e corrida são recusados, e os fluxos legítimos continuam funcionando",
+      "status": "PASS",
+      "evidence": "5 pagamentos simultâneos de 4.000 numa fatura de 10.000 → 2 aceitos (8.000); 2.001 recusado; 2.000 quita; +1 recusado; após estorno aceita de novo; chave repetida em paralelo = 1 linha; Bob recusado"
+    }
+  ]
+}

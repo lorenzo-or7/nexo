@@ -100,6 +100,8 @@ export interface EntryRow {
   invoiceRef: string | null;
   /** compra no cartão de crédito (não mexe no saldo da conta) */
   purchase?: { installments: number; firstInvoiceRef: string | null; status: string } | null;
+  /** compra no cartão: soma das parcelas ATIVAS (negativo). Difere de `amount` quando há parcelas canceladas por estorno. */
+  netAmount?: Cents;
   /** neste lançamento de reembolso: quem paga e a compra de origem */
   counterparty?: string | null;
   reimbursesLabel?: string | null;
@@ -242,6 +244,19 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
     if (f.q) pq = pq.or(`description.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
     const { data: purchases, error: pErr } = await pq;
     if (pErr) throw new Error(`Falha ao carregar compras no cartão: ${pErr.message}`);
+    // valor líquido = parcelas ativas (as canceladas por estorno não contam como consumo)
+    const net = new Map<string, number>();
+    const pids = (purchases ?? []).map((p) => p.id);
+    if (pids.length) {
+      const { data: inst, error: iErr } = await supabase
+        .from("card_charges")
+        .select("purchase_id,amount_cents")
+        .in("purchase_id", pids.slice(0, 500))
+        .eq("kind", "installment")
+        .is("cancelled_at", null);
+      if (iErr) throw new Error(`Falha ao carregar parcelas: ${iErr.message}`);
+      for (const r of inst ?? []) net.set(r.purchase_id as string, (net.get(r.purchase_id as string) ?? 0) + Number(r.amount_cents));
+    }
     for (const p of purchases ?? []) {
       out.push({
         id: p.id,
@@ -260,6 +275,7 @@ export async function loadEntries(supabase: SupabaseClient, f: EntryFilters, cat
         cardId: p.card_id,
         invoiceRef: p.first_invoice_ref,
         purchase: { installments: p.installment_count, firstInvoiceRef: p.first_invoice_ref, status: p.status },
+        netAmount: -(net.get(p.id) ?? 0) as Cents,
       });
     }
     out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
