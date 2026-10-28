@@ -20,7 +20,7 @@ describe("menu: item aceso", () => {
     expect(new Set(NAV.map((i) => i.href)).size).toBe(NAV.length);
   });
 
-  it("a barra inferior do celular continua com no máximo 5 itens + 'Mais'", () => {
-    expect(NAV.filter((i) => !i.more).length).toBeLessThanOrEqual(5);
+  it("a barra inferior do celular continua com no máximo 4 atalhos + 'Mais'", () => {
+    expect(NAV.filter((i) => !i.more).length).toBeLessThanOrEqual(4);
   });
 });

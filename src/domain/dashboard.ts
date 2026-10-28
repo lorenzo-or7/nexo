@@ -2,10 +2,11 @@
  * Monta o modelo da tela inicial a partir dos dados reais (já carregados do banco).
  * Função pura e serializável: tudo que aparece no dashboard é derivado daqui.
  */
-import { computeInvoices } from "./billing";
-import { categoryColor } from "./categories";
+import { computeInvoices, invoiceLabel } from "./billing";
+import { categoryBreakdown, type CategoryBreakdownItem } from "./categories";
 import { addDays, monthOf, type LocalDate } from "./dates";
 import { accountBalance, incomeTotal, spendingLines, type AccountEntry } from "./ledger";
+import { compose, toDetailItem, type Composition, type DetailItem, type InvoiceDetail } from "./indicators";
 import { sum, type Cents } from "./money";
 import { buildTimeline, freeToSpend, horizonEndOfMonth, type TimelineInput, type TimelineStatus } from "./timeline";
 
@@ -89,7 +90,9 @@ export interface DashboardModel {
     bankBalance: Cents;
     toReceive: Cents;
     toPay: Cents;
+    /** fatura ainda aberta (não fechada) de cada cartão; parcelas futuras ficam em `futureInvoices` */
     openInvoices: Cents;
+    futureInvoices: Cents;
     closedUnpaid: Cents;
     monthExpenses: Cents;
     monthIncome: Cents;
@@ -106,8 +109,21 @@ export interface DashboardModel {
   series: { date: LocalDate; balance: number }[];
   recent: { id: string; date: LocalDate; label: string; amount: Cents; kind: string }[];
   byCategory: { name: string; amount: Cents; color: string }[];
+  /** categorias principais com suas subcategorias (para o detalhamento por nível) */
+  categoryTree: CategoryBreakdownItem[];
+  /** mês (AAAA-MM) a que as despesas por categoria se referem */
+  categoryMonth: string;
   /** destaque nos dois cenários: o usuário alterna na tela */
   scenarios: { confirmed: ForecastScenario; withExpected: ForecastScenario };
+  /** composição de cada indicador (abre no painel de detalhes) */
+  details: {
+    receivables: DetailItem[];
+    payables: DetailItem[];
+    openInvoices: InvoiceDetail[];
+    futureInvoices: InvoiceDetail[];
+    closedInvoices: InvoiceDetail[];
+    composition: { confirmed: Composition; withExpected: Composition };
+  };
   /** dados dos gráficos (valores em reais, só para desenhar) */
   chart: { days: ChartDay[]; expectedIncome: ExpectedIncomeItem[]; defaultShowExpected: boolean };
 }
@@ -163,14 +179,35 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   });
 
   let openInvoices = 0;
+  let futureInvoices = 0;
   let closedUnpaid = 0;
+  const openList: InvoiceDetail[] = [];
+  const futureList: InvoiceDetail[] = [];
+  const closedList: InvoiceDetail[] = [];
   const cards = input.cards.map((meta) => {
     const c = base.cards.find((x) => x.id === meta.id)!;
     const invoices = computeInvoices(c.config, c.charges, c.payments, today);
     let current: (typeof invoices)[number] | undefined;
+    let openSeen = false;
     for (const inv of invoices) {
-      if (inv.status === "open") openInvoices += inv.remaining;
-      if (inv.status === "closed" || inv.status === "overdue") closedUnpaid += inv.remaining;
+      const detail: InvoiceDetail = {
+        cardId: meta.id, cardName: meta.name, ref: inv.ref, label: invoiceLabel(inv),
+        closingDate: inv.closingDate, dueDate: inv.dueDate, total: inv.total, paid: inv.paid, remaining: inv.remaining,
+      };
+      if (inv.status === "open" && inv.remaining > 0) {
+        if (!openSeen) {
+          openInvoices += inv.remaining;
+          openList.push(detail);
+          openSeen = true;
+        } else {
+          futureInvoices += inv.remaining;
+          futureList.push(detail);
+        }
+      }
+      if ((inv.status === "closed" || inv.status === "overdue") && inv.remaining > 0) {
+        closedUnpaid += inv.remaining;
+        closedList.push(detail);
+      }
       if (!current && inv.remaining > 0 && inv.dueDate >= today) current = inv;
     }
     return {
@@ -182,34 +219,18 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
   });
 
   const flows = timeline.events.filter((e) => e.status !== "realized" && e.status !== "hypothetical");
+  // "A receber"/"A pagar" não dependem do ajuste de receitas previstas e ignoram transferências
+  // (os dois lados se anulam) — fonte única para o card e para o detalhamento.
+  const payables = withExpected.events.filter(
+    (e) => e.status !== "realized" && e.status !== "hypothetical" && e.kind !== "transfer",
+  );
   const month = monthOf(today);
   const monthStart = `${month}-01`;
   const monthEnd = horizonEndOfMonth(today);
   const chargesFlat = base.cards.flatMap((c) => c.charges.map((ch) => ({ ...ch })));
   const lines = spendingLines(base.entries, chargesFlat, monthStart, monthEnd);
 
-  const catName = new Map(input.categories.map((c) => [c.id, c]));
-  const topName = (id: string | null) => {
-    if (!id) return "Sem categoria";
-    let c = catName.get(id);
-    while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
-    return c?.name ?? "Sem categoria";
-  };
-  const topNode = (id: string | null) => {
-    let c = id ? catName.get(id) : undefined;
-    while (c?.parentId && catName.get(c.parentId)) c = catName.get(c.parentId);
-    return c;
-  };
-  const cat = new Map<string, number>();
-  const catColor = new Map<string, string>();
-  for (const l of lines) {
-    const name = topName(l.categoryId);
-    cat.set(name, (cat.get(name) ?? 0) + l.amount);
-    if (!catColor.has(name)) {
-      const node = topNode(l.categoryId);
-      catColor.set(name, categoryColor({ id: node?.id ?? name, name, parentId: null, kind: "expense", color: node?.color ?? null }, []));
-    }
-  }
+  const tree = categoryBreakdown(lines, input.categories).filter((c) => c.amount > 0);
 
   const recent = [...base.entries]
     .filter((e: AccountEntry) => e.status === "confirmed" && e.date <= today)
@@ -224,9 +245,10 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     hasDemo: input.accounts.some((a) => a.isDemo),
     totals: {
       bankBalance: timeline.startBalance,
-      toReceive: sum(flows.filter((e) => e.amount > 0).map((e) => e.amount)),
-      toPay: sum(flows.filter((e) => e.amount < 0).map((e) => -e.amount)),
+      toReceive: sum(payables.filter((e) => e.amount > 0).map((e) => e.amount)),
+      toPay: sum(payables.filter((e) => e.amount < 0).map((e) => -e.amount)),
       openInvoices: openInvoices as Cents,
+      futureInvoices: futureInvoices as Cents,
       closedUnpaid: closedUnpaid as Cents,
       monthExpenses: sum(lines.map((l) => l.amount)),
       monthIncome: incomeTotal(base.entries, monthStart, monthEnd),
@@ -242,10 +264,20 @@ export function buildDashboard(input: DashboardInput): DashboardModel {
     upcoming: flows.slice(0, 8).map((e) => ({ date: e.date, label: e.label, amount: e.amount, status: e.status, originalDate: e.originalDate })),
     series: timeline.days.map((d) => ({ date: d.date, balance: d.closing / 100 })),
     recent,
-    byCategory: [...cat.entries()]
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, amount]) => ({ name, amount: amount as Cents, color: catColor.get(name)! })),
+    byCategory: tree.map((c) => ({ name: c.name, amount: c.amount as Cents, color: c.color })),
+    categoryTree: tree,
+    categoryMonth: month,
+    details: {
+      receivables: payables.filter((e) => e.amount > 0).map(toDetailItem),
+      payables: payables.filter((e) => e.amount < 0).map(toDetailItem),
+      openInvoices: openList,
+      futureInvoices: futureList,
+      closedInvoices: closedList,
+      composition: {
+        confirmed: compose(confirmedOnly, { reserve: input.reserve, safetyMargin: input.safetyMargin }),
+        withExpected: compose(withExpected, { reserve: input.reserve, safetyMargin: input.safetyMargin }),
+      },
+    },
     scenarios: { confirmed: scenarioOf(confirmedOnly, 0 as Cents), withExpected: scenarioOf(withExpected, expectedTotal) },
     chart: { days: chartDays, expectedIncome, defaultShowExpected: base.includeExpectedIncome },
   };

@@ -14,6 +14,9 @@ for (const path of PAGES) {
     const img = page.locator(OR7).first();
     await img.scrollIntoViewIfNeeded();
     await expect(img).toBeVisible();
+    // a imagem é lazy e, no servidor de desenvolvimento, o 1º pedido ao otimizador (/_next/image) pode
+    // levar vários segundos: espera o carregamento em vez de ler naturalWidth no instante em que ela aparece
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth), { timeout: 30_000 }).toBeGreaterThan(0);
     const m = await img.evaluate((el: HTMLImageElement) => ({ nw: el.naturalWidth, w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, filter: getComputedStyle(el).filter }));
     expect(m.nw).toBeGreaterThan(0);
     expect(m.filter).toBe("none");

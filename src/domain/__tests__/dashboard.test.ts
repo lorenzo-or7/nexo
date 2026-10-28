@@ -98,4 +98,56 @@ describe("dashboard derivado dos dados", () => {
     // as três partes sempre somam o total de saídas do dia
     for (const x of d.chart.days) expect(x.outInvoices + x.outRecurring + x.outOther).toBeCloseTo(x.expenses);
   });
+
+  it("A receber não zera quando o ajuste de receitas previstas está desligado", () => {
+    const on = buildDashboard(input());
+    const off = input();
+    off.base = { ...off.base, includeExpectedIncome: false };
+    const d = buildDashboard(off);
+    expect(d.totals.toReceive).toBe(on.totals.toReceive);
+    expect(d.totals.toReceive).toBe(81268 + 48899);
+  });
+
+  it("A receber e A pagar ignoram transferências entre contas", () => {
+    const i = input();
+    const today = i.base.today;
+    i.base.entries = [
+      ...i.base.entries,
+      { id: "t1", accountId: i.base.accounts[0].id, date: today.slice(0, 8) + "28", amount: 10000 as Cents, kind: "transfer", status: "scheduled", description: "Transf", categoryId: null },
+    ];
+    const d = buildDashboard(i);
+    expect(d.totals.toReceive).toBe(81268 + 48899);
+  });
+
+  it("Faturas abertas conta só a fatura aberta atual de cada cartão (parcelas futuras à parte)", () => {
+    const i = input();
+    const c = i.base.cards.find((x) => x.id === "card-nubank")!;
+    c.charges = [
+      ...c.charges,
+      { id: "fut", cardId: c.id, invoiceRef: "2027-03", amount: 99900 as Cents, date: i.base.today, kind: "installment", purchaseId: "pf", installmentNumber: 1, installmentCount: 1 },
+    ];
+    const d = buildDashboard(i);
+    expect(d.totals.openInvoices).toBe(81488);
+    expect(d.totals.futureInvoices).toBeGreaterThanOrEqual(99900);
+  });
+
+  it("detalhamento fecha exatamente com os indicadores principais", () => {
+    const d = buildDashboard(input());
+    const t = d.totals;
+    const sumItems = (l: { amount: number }[]) => l.reduce((a, x) => a + x.amount, 0);
+    expect(sumItems(d.details.receivables)).toBe(t.toReceive);
+    expect(-sumItems(d.details.payables)).toBe(t.toPay);
+    expect(sumItems(d.details.openInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.openInvoices);
+    expect(sumItems(d.details.futureInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.futureInvoices);
+    expect(sumItems(d.details.closedInvoices.map((x) => ({ amount: x.remaining })))).toBe(t.closedUnpaid);
+    expect(sumItems(d.accounts.map((a) => ({ amount: a.balance })))).toBe(t.bankBalance);
+    for (const [k, sc] of [["confirmed", d.scenarios.confirmed], ["withExpected", d.scenarios.withExpected]] as const) {
+      const c = d.details.composition[k];
+      expect(c.startBalance + sumItems(c.rows)).toBe(c.endBalance);
+      expect(c.endBalance).toBe(sc.projected);
+      expect(c.free).toBe(sc.free);
+      expect(c.lowest).toBe(sc.lowest);
+      expect(Math.min(...c.series.map((x) => x.balance))).toBe(c.lowest);
+    }
+  });
 });

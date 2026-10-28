@@ -198,6 +198,24 @@ describe("compras no crédito, faturas e estornos (banco)", () => {
     expect(expenses).toHaveLength(0);
   });
 
+  it("pagamentos parciais somam, repetir a mesma chave não duplica e o estorno é auditável e único", async () => {
+    const { acc, card } = await setupCard(ALICE);
+    // a fatura precisa ter o que pagar: desde a migration 20261028000100 o banco recusa pagamento acima do devido
+    await as(ALICE, () => q(`select create_credit_purchase($1, 'Fatura de teste', null, '2026-10-05', 100000, $2::jsonb)`, [card, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 100000 }])]));
+    const p1 = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
+    const again = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
+    expect(again.id).toBe(p1.id);
+    const p2 = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 60000, '2026-10-12', 'confirmed', 'k-2') as id`, [card, acc]));
+    expect(await balance(ALICE, acc)).toBe(0);
+    await expect(as(BOB, () => q(`select reverse_invoice_payment($1)`, [p2.id]))).rejects.toThrow(/não encontrado/);
+    const rev = await as(ALICE, () => one<{ r: { amount_cents: number } }>(`select reverse_invoice_payment($1) as r`, [p2.id]));
+    expect(rev.r.amount_cents).toBe(60000);
+    expect(await balance(ALICE, acc)).toBe(60000);
+    await expect(as(ALICE, () => q(`select reverse_invoice_payment($1)`, [p2.id]))).rejects.toThrow(/já estornado/);
+    const kept = await as(ALICE, () => one<{ deleted: boolean }>(`select deleted_at is not null as deleted from account_entries where id = $1`, [p2.id]));
+    expect(kept.deleted).toBe(true);
+  });
+
   it("parcelas que não somam o total são rejeitadas", async () => {
     const { card } = await setupCard(ALICE);
     await expect(as(ALICE, () => q(`select create_credit_purchase($1, 'X', null, '2026-10-05', 8500, $2::jsonb)`, [
@@ -593,12 +611,72 @@ describe("renda fixa", () => {
     expect(await as(BOB, () => q(`select 1 from fixed_incomes`))).toHaveLength(0);
     await expect(as(BOB, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-05')`, [fid]))).rejects.toThrow();
 
-    // com histórico, remover só encerra
+    // com recebimento CONFIRMADO, excluir some da lista mas preserva o dinheiro que entrou
     const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
-    expect(res.r).toBe("ended");
+    expect(res.r).toBe("deleted_with_history");
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1 and deleted_at is null`, [fid]))).toHaveLength(0);
+    expect(await balance(ALICE, acc)).toBe(180000); // o dinheiro que já entrou continua no extrato
     // conta com renda fixa só arquiva
     const rm = await as(ALICE, () => one<{ r: string }>(`select remove_account($1) as r`, [acc]));
     expect(rm.r).toBe("archived");
+  });
+
+  it("excluir uma renda só com lançamentos PREVISTOS apaga tudo (bug: virava 'encerrada' e ficava na lista)", async () => {
+    const acc = await newAccount(ALICE, "Conta exclusão renda");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'salary', 'Salário teste', null, 160000, 4::smallint, '2026-08-04', null, $1, null, null) as id`, [acc])).id);
+    // o sistema cria sozinho os meses vencidos como PREVISTOS
+    for (const [p, d] of [["2026-08", "2026-08-04"], ["2026-09", "2026-09-04"], ["2026-10", "2026-10-04"]]) {
+      await as(ALICE, () => q(`select record_fixed_income_entry($1, $2, $3)`, [fid, p, d]));
+    }
+    expect(await as(ALICE, () => q(`select 1 from account_entries where fixed_income_id = $1`, [fid]))).toHaveLength(3);
+
+    const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
+    expect(res.r).toBe("deleted");
+    // a renda e todos os seus lançamentos sumiram: nada órfão, nada na lista
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1`, [fid]))).toHaveLength(0);
+    expect(await as(ALICE, () => q(`select 1 from account_entries where fixed_income_id = $1`, [fid]))).toHaveLength(0);
+    expect(await as(ALICE, () => q(`select 1 from account_entries where description = 'Salário teste'`))).toHaveLength(0);
+    expect(await balance(ALICE, acc)).toBe(0);
+    // não dá para excluir de novo nem lançar mês para ela
+    await expect(as(ALICE, () => q(`select remove_fixed_income($1, '2026-10-20')`, [fid]))).rejects.toThrow(/não encontrada/);
+    await expect(as(ALICE, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-04')`, [fid]))).rejects.toThrow(/não encontrada/);
+  });
+
+  it("encerrar × excluir: encerrada guarda histórico e não gera mais; excluída com histórico fica oculta e não volta", async () => {
+    const acc = await newAccount(ALICE, "Conta encerrar renda");
+    const fid = await as(ALICE, async () => (await one<{ id: string }>(
+      `select save_fixed_income(null, 'client', 'Cliente X', 'X', 90000, 10::smallint, '2026-08-10', null, $1, null, null) as id`, [acc])).id);
+    const ids: string[] = [];
+    for (const [p, d] of [["2026-08", "2026-08-10"], ["2026-09", "2026-09-10"]]) {
+      const r = await as(ALICE, () => one<{ r: { id: string } }>(`select record_fixed_income_entry($1, $2, $3) as r`, [fid, p, d]));
+      ids.push(r.r.id);
+    }
+    await as(ALICE, () => q(`select confirm_entry($1, '2026-08-10')`, [ids[0]])); // agosto: dinheiro entrou; setembro: só previsto
+
+    // previsão de mês futuro criada à mão (ex.: lançamento adiantado) some ao encerrar; o confirmado e o vencido ficam
+    await as(ALICE, () => q(`select record_fixed_income_entry($1, '2026-11', '2026-11-10')`, [fid]));
+    const ended = await as(ALICE, () => one<{ r: string }>(`select end_fixed_income($1, '2026-10-16') as r`, [fid]));
+    expect(ended.r).toBe("ended");
+    const f = await as(ALICE, () => one<{ status: string; deleted_at: string | null; end_date: string }>(`select status, deleted_at, to_char(end_date,'YYYY-MM-DD') as end_date from fixed_incomes where id = $1`, [fid]));
+    expect(f.status).toBe("ended");
+    expect(f.deleted_at).toBeNull(); // encerrada continua consultável
+    expect(f.end_date).toBe("2026-10-16");
+    const left = await as(ALICE, () => q<{ fixed_income_period: string }>(`select fixed_income_period from account_entries where fixed_income_id = $1 order by 1`, [fid]));
+    expect(left.map((x) => x.fixed_income_period)).toEqual(["2026-08", "2026-09"]);
+    // encerrada não recebe mês novo
+    const noNew = await as(ALICE, () => one<{ r: { created: boolean } }>(`select record_fixed_income_entry($1, '2026-10', '2026-10-10') as r`, [fid]));
+    expect(noNew.r.created).toBe(false);
+
+    // excluir: o previsto de setembro some; o confirmado de agosto fica no extrato; a renda sai da lista
+    const del = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-16') as r`, [fid]));
+    expect(del.r).toBe("deleted_with_history");
+    expect(await as(ALICE, () => q(`select 1 from fixed_incomes where id = $1 and deleted_at is null`, [fid]))).toHaveLength(0);
+    const kept = await as(ALICE, () => q<{ status: string }>(`select status from account_entries where fixed_income_id = $1 and deleted_at is null`, [fid]));
+    expect(kept.map((k) => k.status)).toEqual(["confirmed"]);
+    expect(await balance(ALICE, acc)).toBe(90000);
+    // e outro usuário não consegue encerrar nem excluir
+    await expect(as(BOB, () => q(`select end_fixed_income($1, '2026-10-16')`, [fid]))).rejects.toThrow();
   });
 
   it("sem histórico, remover apaga", async () => {
@@ -607,5 +685,197 @@ describe("renda fixa", () => {
       `select save_fixed_income(null, 'salary', 'Salário', null, 500000, 5::smallint, '2026-11-05', null, $1, null, null) as id`, [acc])).id);
     const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
     expect(res.r).toBe("deleted");
+  });
+});
+
+describe("pagamento de fatura: guarda no banco (migration 20261028000100)", () => {
+  const sched = (n: number) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ number: i + 1, invoice_ref: `2026-${10 + i}`, amount_cents: 10000 })));
+  async function setup(uid: string) {
+    const acc = await newAccount(uid, "Conta pgto", 500000);
+    const card = await as(uid, async () => (await one<{ id: string }>(`insert into cards (name, closing_day, due_day, payment_account_id) values ('Cartão pgto', 13, 20, $1) returning id`, [acc])).id);
+    await as(uid, () => q(`select create_credit_purchase($1, 'Compra', null, '2026-10-05', 30000, $2::jsonb)`, [card, sched(3)]));
+    return { acc, card };
+  }
+  const pay = (uid: string, card: string, acc: string, amount: number, key: string | null = null, ref = "2026-10", status = "confirmed") =>
+    as(uid, () => one<{ id: string }>(`select pay_invoice($1, $2, $3, $4, '2026-10-20', $5, $6) as id`, [card, ref, acc, amount, status, key]));
+
+  it("parcial, integral e excedente: nunca passa do devido", async () => {
+    const { acc, card } = await setup(ALICE);
+    await pay(ALICE, card, acc, 4000, "g-1");
+    await expect(pay(ALICE, card, acc, 6001, "g-2")).rejects.toThrow(/passa do que falta/);
+    await pay(ALICE, card, acc, 6000, "g-3");
+    await expect(pay(ALICE, card, acc, 1, "g-4")).rejects.toThrow(/já está quitada/);
+    // outras faturas da mesma compra continuam independentes
+    await pay(ALICE, card, acc, 10000, "g-5", "2026-11");
+    await expect(pay(ALICE, card, acc, 10001, "g-6", "2026-12")).rejects.toThrow(/passa do que falta/);
+    // estornar libera o valor de novo
+    const last = await pay(ALICE, card, acc, 10000, "g-7", "2026-12");
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [last.id]));
+    await pay(ALICE, card, acc, 10000, "g-8", "2026-12");
+    // pagamento agendado também conta (evita agendar duas vezes o mesmo valor)
+    const s2 = await setup(ALICE);
+    await pay(ALICE, s2.card, s2.acc, 10000, "s-1", "2026-10", "scheduled");
+    await expect(pay(ALICE, s2.card, s2.acc, 1, "s-2")).rejects.toThrow(/já está quitada/);
+  });
+
+  it("agendado: reduz o que ainda pode ser pago (igual à tela), estorno libera, estorno duplo é recusado", async () => {
+    const { acc, card } = await setup(ALICE);
+    const s1 = await pay(ALICE, card, acc, 4000, "sc-1", "2026-10", "scheduled");
+    await expect(pay(ALICE, card, acc, 6001, "sc-2")).rejects.toThrow(/passa do que falta/);
+    const s2 = await pay(ALICE, card, acc, 6000, "sc-3");
+    await expect(pay(ALICE, card, acc, 1, "sc-4")).rejects.toThrow(/já está quitada/);
+    // estornar o agendado libera exatamente o valor dele, e nada além disso
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [s1.id]));
+    await expect(as(ALICE, () => q(`select reverse_invoice_payment($1)`, [s1.id]))).rejects.toThrow(/já estornado/);
+    await expect(pay(ALICE, card, acc, 4001, "sc-5")).rejects.toThrow(/passa do que falta/);
+    await pay(ALICE, card, acc, 4000, "sc-6");
+    expect(s2.id).toBeTruthy();
+    // Bob não estorna o pagamento da Alice
+    await expect(as(BOB, () => q(`select reverse_invoice_payment($1)`, [s2.id]))).rejects.toThrow(/não encontrado/);
+  });
+
+  it("propriedade: cartão e conta de outro usuário (ou arquivada) são recusados", async () => {
+    const a = await setup(ALICE);
+    const b = await setup(BOB);
+    await expect(pay(BOB, a.card, b.acc, 100)).rejects.toThrow(/Cartão não encontrado/);
+    await expect(pay(BOB, b.card, a.acc, 100)).rejects.toThrow(/Conta não encontrada/);
+    await expect(pay(null as unknown as string, a.card, a.acc, 100)).rejects.toThrow();
+    await as(ALICE, () => q(`update accounts set archived_at = now() where id = $1`, [a.acc]));
+    await expect(pay(ALICE, a.card, a.acc, 100)).rejects.toThrow(/Conta não encontrada/);
+  });
+
+  it("valida situação, valor, fatura e data", async () => {
+    const { acc, card } = await setup(ALICE);
+    for (const status of ["expected", "foo", ""]) await expect(pay(ALICE, card, acc, 100, null, "2026-10", status)).rejects.toThrow(/Situação/);
+    await expect(pay(ALICE, card, acc, 0)).rejects.toThrow(/positivo/);
+    await expect(pay(ALICE, card, acc, -5)).rejects.toThrow(/positivo/);
+    for (const ref of ["2026-13", "26-10", "2026-10-01", "x"]) await expect(pay(ALICE, card, acc, 100, null, ref)).rejects.toThrow(/Fatura inválida/);
+    await expect(as(ALICE, () => q(`select pay_invoice($1, '2026-10', $2, 100, null)`, [card, acc]))).rejects.toThrow(/Data/);
+    await expect(pay(ALICE, card, acc, 100, "x".repeat(101))).rejects.toThrow(/Chave/);
+  });
+
+  it("idempotência consistente: mesma chave = mesmo pedido; outro pedido, outra operação ou pagamento estornado são recusados", async () => {
+    const { acc, card } = await setup(ALICE);
+    const p = await pay(ALICE, card, acc, 3000, "i-1");
+    expect((await pay(ALICE, card, acc, 3000, "i-1")).id).toBe(p.id);
+    await expect(pay(ALICE, card, acc, 3001, "i-1")).rejects.toThrow(/outra operação/); // valor diferente
+    await expect(pay(ALICE, card, acc, 3000, "i-1", "2026-11")).rejects.toThrow(/outra operação/); // outra fatura
+    const acc2 = await newAccount(ALICE, "Outra conta", 100000);
+    await expect(pay(ALICE, card, acc2, 3000, "i-1")).rejects.toThrow(/outra operação/); // outra conta
+    // chave de um lançamento que não é pagamento de fatura
+    await as(ALICE, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on, idempotency_key) values ($1, 'expense', 'confirmed', -100, '2026-10-02', 'invpay:t')`, [acc]));
+    await expect(pay(ALICE, card, acc, 100, "invpay:t")).rejects.toThrow(/outra operação/);
+    // depois do estorno a mesma chave não ressuscita o pagamento
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [p.id]));
+    await expect(pay(ALICE, card, acc, 3000, "i-1")).rejects.toThrow(/estornado/);
+    // e a chave é por usuário: outro usuário pode usar o mesmo texto
+    const b = await setup(BOB);
+    await pay(BOB, b.card, b.acc, 3000, "i-1");
+  });
+});
+
+describe("gerenciamento de dados: exportar, limpar lançamentos, limpar tudo", () => {
+  const CAROL = "33333333-3333-4333-8333-333333333333";
+
+  /** Cenário fictício completo: conta, cartão, compra parcelada, pagamento, assinatura, renda fixa, meta. */
+  async function seed(uid: string, label: string) {
+    const acc = await newAccount(uid, `Conta ${label}`, 100000);
+    const card = await as(uid, async () => (await one<{ id: string }>(
+      `insert into cards (name, closing_day, due_day, payment_account_id, limit_cents) values ('Cartão ${label}', 13, 20, $1, 500000) returning id`, [acc])).id);
+    await as(uid, () => q(`select create_credit_purchase($1, 'Compra ${label}', null, '2026-10-05', 8500, $2::jsonb)`, [
+      card, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 4250 }, { number: 2, invoice_ref: "2026-11", amount_cents: 4250 }]),
+    ]));
+    await as(uid, () => q(`select pay_invoice($1, '2026-10', $2, 1000, '2026-10-20')`, [card, acc]));
+    await as(uid, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on, description) values ($1, 'expense', 'confirmed', -2500, '2026-10-03', 'Mercado ${label}')`, [acc]));
+    const sub = (await as(uid, () => one<{ id: string }>(
+      `select save_subscription(null, 'Streaming ${label}', null, 'monthly', 1::smallint, '2026-08-15'::date, 'account', null, $1, 3990, null) as id`, [acc]))).id;
+    await as(uid, () => q(`select record_subscription_charge($1, '2026-09', '2026-09-15', 3990, null, 'confirmed')`, [sub]));
+    const fi = (await as(uid, () => one<{ id: string }>(
+      `select save_fixed_income(null, 'salary', 'Salário ${label}', null, 500000, 5::smallint, '2026-08-05', null, $1, null, null) as id`, [acc]))).id;
+    await as(uid, () => q(`insert into goals (name, target_cents) values ('Viagem ${label}', 100000)`));
+    return { acc, card, sub, fi };
+  }
+  const count = (uid: string, table: string) => as(uid, async () => Number((await one<{ n: string }>(`select count(*) n from ${table}`)).n));
+
+  beforeAll(async () => {
+    await db.query(`insert into auth.users (id, email) values ($1, 'carol@nexo.test')`, [CAROL]);
+  });
+
+  it("exportação traz só os dados do próprio usuário e nenhum segredo", async () => {
+    await seed(CAROL, "C");
+    await seed(BOB, "B");
+    const ex = await as(CAROL, async () => (await one<{ d: Record<string, unknown[]> & { profile: Record<string, unknown> } }>(`select export_my_data() as d`)).d);
+    expect(ex.accounts).toHaveLength(1);
+    expect(JSON.stringify(ex)).not.toContain("Conta B");
+    expect(ex.fixed_incomes).toHaveLength(1);
+    expect(ex.subscription_charges).toHaveLength(1);
+    const keys = Object.keys(ex.profile).join(",");
+    expect(keys).not.toMatch(/password|token|secret|key/i);
+    // sem login não exporta
+    await expect(as(null, () => q(`select export_my_data()`))).rejects.toThrow();
+  });
+
+  it("limpar lançamentos: apaga movimentações e preserva contas, cartões, categorias, assinaturas e rendas", async () => {
+    const cats = await count(CAROL, "categories");
+    expect(cats).toBeGreaterThan(0);
+    const r = await as(CAROL, () => one<{ r: Record<string, number> }>(`select clear_my_entries('2026-10-27') as r`));
+    expect(r.r.entries).toBeGreaterThan(0);
+    expect(await count(CAROL, "account_entries")).toBe(0);
+    expect(await count(CAROL, "card_charges")).toBe(0);
+    expect(await count(CAROL, "purchases")).toBe(0);
+    expect(await count(CAROL, "subscription_charges")).toBe(0);
+    // preservados
+    expect(await count(CAROL, "accounts")).toBe(1);
+    expect(await count(CAROL, "cards")).toBe(1);
+    expect(await count(CAROL, "categories")).toBe(cats);
+    expect(await count(CAROL, "subscriptions")).toBe(1);
+    expect(await count(CAROL, "fixed_incomes")).toBe(1);
+    expect(await count(CAROL, "goals")).toBe(1);
+    // saldo volta ao saldo inicial; nada quebrado
+    expect(await balance(CAROL, (await as(CAROL, () => one<{ id: string }>(`select id from accounts`))).id)).toBe(100000);
+    // marcador impede as recorrências de recriar o passado
+    const marks = await as(CAROL, () => one<{ c: string; f: string }>(`select (select charged_through::text from subscriptions) c, (select cleared_before::text from fixed_incomes) f`));
+    expect(marks).toEqual({ c: "2026-10-27", f: "2026-10-27" });
+    // o histórico apagado não fica na auditoria
+    expect(await as(CAROL, async () => Number((await one<{ n: string }>(`select count(*) n from audit_log where table_name in ('account_entries','card_charges','purchases','transfers')`)).n))).toBe(0);
+    // outro usuário não foi tocado
+    expect(await count(BOB, "account_entries")).toBeGreaterThan(0);
+    expect(await count(BOB, "card_charges")).toBeGreaterThan(0);
+  });
+
+  it("limpar lançamentos é repetível sem erro (sem execução dupla com efeito)", async () => {
+    const r = await as(CAROL, () => one<{ r: Record<string, number> }>(`select clear_my_entries('2026-10-27') as r`));
+    expect(r.r.entries).toBe(0);
+  });
+
+  it("limpar tudo: remove dados financeiros, mantém login/perfil, restaura categorias padrão e não toca em outros usuários", async () => {
+    await seed(CAROL, "C2");
+    await as(CAROL, () => q(`update profiles set display_name = 'Carol', theme = 'light', reserve_cents = 5000`));
+    await as(CAROL, () => q(`insert into categories (kind, name) values ('expense', 'Minha categoria própria')`));
+    const bobBefore = [await count(BOB, "accounts"), await count(BOB, "account_entries"), await count(BOB, "cards")];
+    await as(CAROL, () => q(`select clear_all_financial_data()`));
+    for (const t of ["accounts", "cards", "account_entries", "transfers", "purchases", "card_charges", "subscriptions", "subscription_charges", "subscription_prices", "fixed_incomes", "goals", "budgets", "tags", "audit_log"]) {
+      expect(await count(CAROL, t), t).toBe(0);
+    }
+    // categoria própria sumiu; as padrão voltaram
+    expect(await as(CAROL, () => q(`select 1 from categories where name = 'Minha categoria própria'`))).toHaveLength(0);
+    expect(await count(CAROL, "categories")).toBeGreaterThan(10);
+    // perfil e preferências preservados; login (auth.users) intacto
+    const p = await as(CAROL, () => one<{ display_name: string; theme: string }>(`select display_name, theme from profiles`));
+    expect(p).toEqual({ display_name: "Carol", theme: "light" });
+    expect(Number((await one<{ n: string }>(`select count(*) n from auth.users where id = $1`, [CAROL])).n)).toBe(1);
+    // Bob intacto
+    expect([await count(BOB, "accounts"), await count(BOB, "account_entries"), await count(BOB, "cards")]).toEqual(bobBefore);
+    // sem referências quebradas
+    const orphans = await q(`select 1 from account_entries e left join accounts a on a.id = e.account_id where a.id is null`);
+    expect(orphans).toHaveLength(0);
+  });
+
+  it("a etapa final não é executável por usuários e a limpeza exige login", async () => {
+    await expect(as(CAROL, () => q(`select _wipe_finish($1, true)`, [CAROL]))).rejects.toThrow(/permission denied/);
+    await expect(as(CAROL, () => q(`select _wipe_finish($1, true)`, [BOB]))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => q(`select _wipe_finish($1, true)`, [BOB]))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => q(`select clear_all_financial_data()`))).rejects.toThrow();
+    await expect(as(null, () => q(`select clear_my_entries('2026-10-27')`))).rejects.toThrow();
   });
 });

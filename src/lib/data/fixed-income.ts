@@ -40,16 +40,18 @@ const MISSING = new Set(["42P01", "PGRST205", "42703", "PGRST204"]);
 
 /** Fontes de renda fixa. Retorna null se a migration ainda não foi aplicada. */
 export async function loadFixedIncomeRows(supabase: SupabaseClient): Promise<FixedIncomeRow[] | null> {
-  const [list, entries] = await Promise.all([
-    supabase
-      .from("fixed_incomes")
-      .select("id,kind,name,client_name,amount_cents,day_of_month,start_date,end_date,account_id,category_id,notes,status")
-      .order("created_at"),
-    supabase.from("account_entries").select("fixed_income_id,fixed_income_period,status,amount_cents,deleted_at").not("fixed_income_id", "is", null),
-  ]);
+  const COLS = "id,kind,name,client_name,amount_cents,day_of_month,start_date,end_date,account_id,category_id,notes,status";
+  const entriesQ = supabase.from("account_entries").select("fixed_income_id,fixed_income_period,status,amount_cents,deleted_at").not("fixed_income_id", "is", null);
+  // renda excluída (deleted_at) nunca aparece, nem entra em projeção; cleared_before vem da migration de limpeza de dados.
+  // Se alguma coluna ainda não existe (42703), tenta de novo sem ela (migrations pendentes).
+  type Res = { data: any[] | null; error: { code?: string; message: string } | null }; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let list: Res = await supabase.from("fixed_incomes").select(`${COLS},cleared_before`).is("deleted_at", null).order("created_at");
+  if (list.error?.code === "42703") list = await supabase.from("fixed_incomes").select(COLS).is("deleted_at", null).order("created_at");
+  if (list.error?.code === "42703") list = await supabase.from("fixed_incomes").select(COLS).order("created_at");
+  const entries = await entriesQ;
   const err = list.error ?? entries.error;
   if (err) {
-    if (MISSING.has(err.code)) return null;
+    if (MISSING.has(err.code ?? "")) return null;
     throw new Error(`Falha ao carregar renda fixa: ${err.message}`);
   }
   return (list.data ?? []).map((f) => {
@@ -66,6 +68,7 @@ export async function loadFixedIncomeRows(supabase: SupabaseClient): Promise<Fix
         startDate: f.start_date,
         endDate: f.end_date,
         status: f.status as FixedIncomeStatus,
+        clearedBefore: (f as { cleared_before?: string | null }).cleared_before ?? null,
       },
       accountId: f.account_id,
       categoryId: f.category_id,

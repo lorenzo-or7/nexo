@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { todayIn } from "@/domain/dates";
 import { parseBRL } from "@/domain/money";
+import { DELETE_ACCOUNT_PHRASE } from "@/lib/data-management";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/supabase/server";
 
@@ -71,18 +72,28 @@ export async function saveProfile(_: ActionResult, form: FormData): Promise<Acti
   return { ok: true, message: "Preferências salvas." };
 }
 
-/** Exclui a conta e, em cascata, todos os dados financeiros do usuário. */
+/**
+ * Exclui DEFINITIVAMENTE a conta (login e, em cascata, todos os dados financeiros). Irreversível.
+ * Exige as três coisas no servidor: a frase exata, o aceite explícito e a senha atual (reautenticação).
+ * A identidade vem só da sessão validada; nada do formulário diz qual conta apagar.
+ */
 export async function deleteAccount(_: ActionResult, form: FormData): Promise<ActionResult> {
-  if (form.get("confirm") !== "EXCLUIR") return { ok: false, error: 'Digite EXCLUIR para confirmar.' };
+  if (form.get("confirm") !== DELETE_ACCOUNT_PHRASE) return { ok: false, error: `Digite exatamente: ${DELETE_ACCOUNT_PHRASE}` };
+  if (form.get("understood") !== "on") return { ok: false, error: "Marque a caixa para confirmar que entende que a exclusão é permanente." };
+  const password = String(form.get("password") ?? "");
+  if (!password) return { ok: false, error: "Informe sua senha para confirmar que é você." };
   const { supabase, user } = await requireUser();
+  if (!user.email) return { ok: false, error: "Não foi possível confirmar sua identidade." };
   let admin;
   try {
     admin = createAdminClient();
   } catch {
     return { ok: false, error: "Exclusão indisponível: o servidor não tem a chave administrativa configurada." };
   }
+  const re = await supabase.auth.signInWithPassword({ email: user.email, password });
+  if (re.error) return { ok: false, error: "Senha incorreta. Nada foi apagado." };
   const { error } = await admin.auth.admin.deleteUser(user.id);
-  if (error) return { ok: false, error: "Não foi possível excluir a conta agora." };
+  if (error) return { ok: false, error: "Não foi possível excluir a conta agora. Nada foi apagado." };
   await supabase.auth.signOut();
   redirect("/entrar");
 }

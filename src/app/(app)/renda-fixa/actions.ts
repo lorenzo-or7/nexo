@@ -75,6 +75,17 @@ export async function changeFixedIncomeStatus(_: FixedIncomeActionResult, form: 
   return { ok: true, message: action.data === "pause" ? "Renda pausada: não entra mais na previsão até retomar." : "Renda retomada." };
 }
 
+export async function endFixedIncome(_: FixedIncomeActionResult, form: FormData): Promise<FixedIncomeActionResult> {
+  const id = z.uuid().safeParse(form.get("id"));
+  if (!id.success) return { ok: false, error: "Renda inválida." };
+  const { supabase } = await requireUser();
+  const profile = await loadProfile(supabase);
+  const { error } = await supabase.rpc("end_fixed_income", { p_id: id.data, p_today: todayIn(profile.timezone) });
+  if (error) return { ok: false, error: error.code === "PGRST202" ? "Rode a migration 15 (ciclo de vida da renda fixa) no Supabase." : "Não foi possível encerrar a renda." };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Renda encerrada: não gera novos meses e o histórico continua no Extrato." };
+}
+
 export async function removeFixedIncome(_: FixedIncomeActionResult, form: FormData): Promise<FixedIncomeActionResult> {
   const id = z.uuid().safeParse(form.get("id"));
   if (!id.success) return { ok: false, error: "Renda inválida." };
@@ -83,5 +94,13 @@ export async function removeFixedIncome(_: FixedIncomeActionResult, form: FormDa
   const { data, error } = await supabase.rpc("remove_fixed_income", { p_id: id.data, p_today: todayIn(profile.timezone) });
   if (error) return { ok: false, error: "Não foi possível excluir a renda." };
   revalidatePath("/", "layout");
-  return { ok: true, message: data === "deleted" ? "Renda excluída." : "Ela já tinha recebimentos, então foi encerrada e o histórico ficou." };
+  return {
+    ok: true,
+    message:
+      data === "deleted_with_history"
+        ? "Renda excluída. Os recebimentos já confirmados continuam no Extrato."
+        : data === "ended"
+          ? "Ela foi encerrada, não excluída: rode a migration 15 (ciclo de vida da renda fixa) no Supabase para excluir de vez."
+          : "Renda excluída.",
+  };
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isSupabaseConfigured, publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { adoptLocalPreferences } from "@/lib/theme/adopt";
 import { THEME_COOKIE, normalizeTheme } from "@/lib/theme/shared";
 
 export type FormState = { error?: string; success?: string; fields?: Record<string, string> } | undefined;
@@ -78,7 +79,10 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
     },
   });
   if (error) return { error: translate(error.message), fields };
-  if (data.session) redirect("/"); // projeto sem confirmação obrigatória
+  if (data.session) {
+    await adoptLocalPreferences(supabase); // conta nova leva o tema escolhido na landing
+    redirect("/"); // projeto sem confirmação obrigatória
+  }
   return { success: `Enviamos um link de confirmação para ${parsed.data.email}. Abra-o para ativar sua conta.` };
 }
 

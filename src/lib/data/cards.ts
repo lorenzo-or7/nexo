@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { availableLimit, computeInvoices, type CardBillingConfig, type CardCharge, type CardPayment, type LimitRule } from "@/domain/billing";
-import { todayIn, type LocalDate } from "@/domain/dates";
+import { availableLimit, computeInvoices, invoiceLabel, type InvoiceLabel, type CardBillingConfig, type CardCharge, type CardPayment, type LimitRule } from "@/domain/billing";
+import { addMonthRef, monthOf, todayIn, type LocalDate } from "@/domain/dates";
 import type { Cents } from "@/domain/money";
 import type { Profile } from "./finance";
 
@@ -52,6 +52,21 @@ export interface CardListItem {
   used: Cents;
   available: Cents;
   invoice: { ref: string; remaining: Cents; dueDate: LocalDate; closingDate: LocalDate; status: string } | null;
+  /** faturas relevantes (pendentes, pagas recentemente) com os pagamentos de cada uma */
+  invoices: CardInvoiceItem[];
+}
+
+export interface CardInvoiceItem {
+  ref: string;
+  label: InvoiceLabel;
+  closingDate: LocalDate;
+  dueDate: LocalDate;
+  total: Cents;
+  paid: Cents;
+  remaining: Cents;
+  scheduled: Cents;
+  payable: Cents;
+  payments: { id: string; date: LocalDate; amount: Cents; accountId: string; accountName: string; scheduled: boolean }[];
 }
 
 /** Gera URLs temporárias (1 h) para as imagens privadas, numa única chamada. */
@@ -70,7 +85,7 @@ export async function loadCards(supabase: SupabaseClient, profile: Profile) {
     supabase.from("cards").select("*").is("archived_at", null).order("sort_order").order("created_at"),
     supabase.from("accounts").select("id,name,nickname").is("archived_at", null).order("sort_order"),
     supabase.from("card_charges").select("id,card_id,invoice_ref,amount_cents,occurred_on,kind").is("cancelled_at", null),
-    supabase.from("account_entries").select("id,card_id,invoice_ref,amount_cents,occurred_on,account_id").eq("kind", "invoice_payment").eq("status", "confirmed").is("deleted_at", null),
+    supabase.from("account_entries").select("id,card_id,invoice_ref,amount_cents,occurred_on,account_id,status").eq("kind", "invoice_payment").in("status", ["confirmed", "scheduled"]).is("deleted_at", null),
     supabase.from("invoice_overrides").select("*"),
   ]);
   const err = cardsRes.error ?? accountsRes.error ?? chargesRes.error ?? paymentsRes.error ?? overridesRes.error;
@@ -95,8 +110,25 @@ export async function loadCards(supabase: SupabaseClient, profile: Profile) {
       .map((x) => ({ id: x.id, cardId: c.id, invoiceRef: x.invoice_ref, amount: Number(x.amount_cents) as Cents, date: x.occurred_on, kind: x.kind }));
     const payments: CardPayment[] = (paymentsRes.data ?? [])
       .filter((x) => x.card_id === c.id)
-      .map((x) => ({ id: x.id, cardId: c.id, invoiceRef: x.invoice_ref, amount: -Number(x.amount_cents) as Cents, date: x.occurred_on, accountId: x.account_id }));
+      .map((x) => ({ id: x.id, cardId: c.id, invoiceRef: x.invoice_ref, amount: -Number(x.amount_cents) as Cents, date: x.occurred_on, accountId: x.account_id, status: x.status === "scheduled" ? "scheduled" : "confirmed" }));
     const invoices = computeInvoices(config, charges, payments, today);
+    const recentFrom = monthOf(today);
+    const invoiceItems: CardInvoiceItem[] = invoices
+      .filter((i) => (i.remaining > 0 || i.paid > 0) && (i.remaining > 0 || i.ref >= addMonthRef(recentFrom, -2)))
+      .map((i) => ({
+        ref: i.ref,
+        label: invoiceLabel(i),
+        closingDate: i.closingDate,
+        dueDate: i.dueDate,
+        total: i.total,
+        paid: i.paid,
+        remaining: i.remaining,
+        scheduled: i.scheduled,
+        payable: i.payable,
+        payments: payments
+          .filter((p) => p.invoiceRef === i.ref)
+          .map((p) => ({ id: p.id, date: p.date, amount: p.amount, accountId: p.accountId ?? "", accountName: accounts.find((a) => a.id === p.accountId)?.name ?? "Conta", scheduled: p.status === "scheduled" })),
+      }));
     const current = invoices.find((i) => i.remaining > 0 && i.dueDate >= today) ?? invoices.find((i) => i.status === "overdue") ?? null;
     const limit = availableLimit(config, Number(c.limit_cents) as Cents, charges, payments, today, c.limit_rule);
     return {
@@ -125,6 +157,7 @@ export async function loadCards(supabase: SupabaseClient, profile: Profile) {
       invoice: current
         ? { ref: current.ref, remaining: current.remaining, dueDate: current.dueDate, closingDate: current.closingDate, status: current.status }
         : null,
+      invoices: invoiceItems,
     };
   });
   return { today, cards: items, accounts };

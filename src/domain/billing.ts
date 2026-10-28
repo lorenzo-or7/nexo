@@ -91,6 +91,8 @@ export interface CardCharge {
   kind: ChargeKind;
   cancelled?: boolean;
   hypothetical?: boolean;
+  /** cobrança PREVISTA (assinatura futura): entra na fatura prevista, mas ainda não é consumo realizado */
+  projected?: boolean;
   /** categoria da compra (vem da compra, não da parcela) */
   categoryId?: string | null;
 }
@@ -198,8 +200,12 @@ export interface InvoiceSummary {
   carriedIn: Cents;
   total: Cents;
   paid: Cents;
-  /** quanto ainda falta pagar (>= 0); excedente vira crédito na próxima */
+  /** quanto ainda falta pagar (>= 0); excedente vira crédito na próxima. Só pagamentos CONFIRMADOS reduzem. */
   remaining: Cents;
+  /** soma dos pagamentos AGENDADOS (data futura) ainda não realizados desta fatura */
+  scheduled: Cents;
+  /** quanto ainda pode ser lançado como novo pagamento: remaining − agendados (>= 0). É a mesma regra do banco. */
+  payable: Cents;
   /** quanto foi levado para a próxima fatura */
   carriedOut: Cents;
   status: InvoiceStatus;
@@ -207,9 +213,11 @@ export interface InvoiceSummary {
 
 /**
  * Calcula todas as faturas de um cartão de `fromRef` a `toRef`.
- * Pagamentos só contam como confirmados. Pagamento a maior vira crédito na
- * fatura seguinte. Saldo não pago de fatura VENCIDA é levado à seguinte
- * (rotativo); juros entram como lançamento "fee" informado pelo usuário.
+ * `paid`/`remaining` só contam pagamentos confirmados; os agendados aparecem em `scheduled` e reduzem só `payable`
+ * (o que ainda pode ser lançado), igual à guarda do banco. Pagamento a maior vira crédito na
+ * fatura seguinte. Saldo não pago de fatura VENCIDA continua pendente na
+ * própria fatura (status "overdue"); juros entram como lançamento "fee"
+ * informado pelo usuário.
  */
 export function computeInvoices(
   c: CardBillingConfig,
@@ -220,6 +228,7 @@ export function computeInvoices(
 ): InvoiceSummary[] {
   const live = charges.filter((x) => !x.cancelled);
   const paidPayments = payments.filter((p) => (p.status ?? "confirmed") === "confirmed");
+  const scheduledPayments = payments.filter((p) => p.status === "scheduled");
   const refs = [...live.map((x) => x.invoiceRef), ...paidPayments.map((p) => p.invoiceRef)].sort();
   const firstRef = range?.fromRef && (!refs[0] || range.fromRef < refs[0]) ? range.fromRef : refs[0];
   const lastRef = range?.toRef && (!refs.at(-1) || range.toRef > refs.at(-1)!) ? range.toRef : refs.at(-1);
@@ -231,6 +240,7 @@ export function computeInvoices(
     const { closingDate, dueDate } = invoicePeriod(c, ref);
     const ch = sum(live.filter((x) => x.invoiceRef === ref).map((x) => x.amount));
     const paid = sum(paidPayments.filter((p) => p.invoiceRef === ref).map((p) => p.amount));
+    const scheduled = sum(scheduledPayments.filter((p) => p.invoiceRef === ref).map((p) => p.amount));
     const total = ch + carry;
     const balance = total - paid;
     const isClosed = compareDates(today, closingDate) >= 0;
@@ -248,19 +258,14 @@ export function computeInvoices(
       carriedOut = 0;
       status = total > 0 || paid > 0 ? "paid" : isClosed ? "closed" : "open";
     } else if (isPastDue) {
-      remaining = 0;
-      carriedOut = balance;
-      status = "rolled_over";
+      // vencida e não quitada: continua pendente na própria fatura (não some nem é empurrada)
+      remaining = balance;
+      carriedOut = 0;
+      status = "overdue";
     } else {
       remaining = balance;
       carriedOut = 0;
       status = isClosed ? "closed" : "open";
-    }
-    if (status === "rolled_over" && ref === lastRef) {
-      // não há próxima fatura no intervalo para receber o saldo: continua devido e vencido
-      remaining = balance;
-      carriedOut = 0;
-      status = "overdue";
     }
     out.push({
       ref,
@@ -271,6 +276,8 @@ export function computeInvoices(
       total: total as Cents,
       paid,
       remaining: remaining as Cents,
+      scheduled: scheduled as Cents,
+      payable: Math.max(0, remaining - scheduled) as Cents,
       carriedOut: carriedOut as Cents,
       status,
     });
@@ -278,6 +285,17 @@ export function computeInvoices(
   }
   if (range?.fromRef) return out.filter((i) => i.ref >= range.fromRef!);
   return out;
+}
+
+export type InvoiceLabel = "Aberta" | "Fechada" | "Parcialmente paga" | "Paga" | "Vencida" | "Crédito";
+
+/** Rótulo único para a tela. Vencida ≠ paga; parcialmente paga = pagou algo mas ainda falta. */
+export function invoiceLabel(i: Pick<InvoiceSummary, "status" | "paid" | "remaining">): InvoiceLabel {
+  if (i.status === "paid") return "Paga";
+  if (i.status === "credit") return "Crédito";
+  if (i.status === "overdue") return "Vencida";
+  if (i.paid > 0 && i.remaining > 0) return "Parcialmente paga";
+  return i.status === "open" ? "Aberta" : "Fechada";
 }
 
 export type LimitRule = "full_amount" | "billed_only";

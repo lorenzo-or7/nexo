@@ -13,6 +13,6 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
   const supabase = await createClient();
   const profile = await loadProfile(supabase);
   await Promise.all([syncSubscriptions(supabase, profile), syncFixedIncome(supabase, profile)]);
-  const { cards, accounts } = await loadCards(supabase, profile);
-  return <CardsView cards={cards} accounts={accounts} openNew={sp.novo === "1"} />;
+  const { cards, accounts, today } = await loadCards(supabase, profile);
+  return <CardsView cards={cards} accounts={accounts} today={today} openNew={sp.novo === "1"} />;
 }

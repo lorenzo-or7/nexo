@@ -7,6 +7,7 @@ import { Panel } from "@/components/ui/card";
 import { formatMonthBR, type LocalDate } from "@/domain/dates";
 import { STATUS_LABEL } from "@/domain/entries";
 import { formatBRL, sum, type Cents } from "@/domain/money";
+import type { ConsumptionSummary } from "@/domain/consumption";
 import type { EntryFilters, EntryRow, QuickEntryData } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
 import { ConfirmEntryButton, DeleteEntryButton, ReimburseButton } from "./entry-actions";
@@ -40,12 +41,15 @@ function iconFor(e: EntryRow) {
 
 export function EntriesView({
   entries,
+  consumption = null,
   filters,
   data,
   basePath = "/lancamentos",
   query,
 }: {
   entries: EntryRow[];
+  /** consumo do período pela mesma conta do gráfico de categorias (null = filtro que não é de consumo) */
+  consumption?: ConsumptionSummary | null;
   filters: EntryFilters;
   data: QuickEntryData;
   basePath?: string;
@@ -86,7 +90,7 @@ export function EntriesView({
   const realized = entries.filter((e) => e.status === "confirmed" && !e.transfer);
   const income = sum(realized.filter((e) => e.kind === "income").map((e) => e.amount));
   const refunds = sum(realized.filter((e) => e.kind === "refund").map((e) => e.amount));
-  const expenses = sum(realized.filter((e) => e.kind === "expense").map((e) => -e.amount));
+  const expenses = sum(realized.filter((e) => e.kind === "expense").map((e) => -(e.netAmount ?? e.amount)));
   const pendingCount = entries.filter((e) => e.status !== "confirmed").length;
 
 
@@ -136,7 +140,7 @@ export function EntriesView({
                           ? [cardName.get(e.cardId!) ?? "Cartão", e.purchase!.installments > 1 ? `${e.purchase!.installments}x` : "à vista", catLabel(e.categoryId)].filter(Boolean).join(" · ")
                           : [accountName.get(e.accountId), catLabel(e.categoryId)].filter(Boolean).join(" · ");
                       const dot = isPurchase ? cardColor.get(e.cardId!) : accountColor.get(e.accountId);
-                      const display = isTransfer && !filters.accountId ? e.transfer!.amount : e.amount;
+                      const display = isTransfer && !filters.accountId ? e.transfer!.amount : e.netAmount ?? e.amount;
                       const content = (
                         <>
                           <span className="relative grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-field text-ink-2">
@@ -159,6 +163,11 @@ export function EntriesView({
                                 </span>
                               ))}
                               {e.purchase?.status === "refunded" && <span className="rounded-full bg-positive-soft px-2 py-0.5 text-positive">Estornada</span>}
+                              {e.purchase && e.purchase.status !== "refunded" && e.netAmount !== undefined && e.netAmount !== e.amount && (
+                                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink-2" title="Parcelas canceladas por estorno não contam como consumo">
+                                  Total {formatBRL(-e.amount as Cents)} · conta {formatBRL(-e.netAmount as Cents)}
+                                </span>
+                              )}
                               {e.tags.map((t) => <span key={t} className="rounded-full bg-accent-soft px-2 py-0.5 text-accent">{t}</span>)}
                             </span>
                           </span>
@@ -214,6 +223,20 @@ export function EntriesView({
             </dl>
             <p className="text-xs text-ink-3">Só o que já aconteceu. Compras no crédito contam pela data da compra; transferências entre suas contas e pagamentos de fatura não entram.</p>
           </Panel>
+          {consumption && (
+            <Panel className="grid gap-3" data-testid="consumption-panel">
+              <h2 className="text-[1.0625rem] font-semibold tracking-tight">Consumo{filters.month ? ` de ${formatMonthBR(filters.month)}` : ""}</h2>
+              <dl className="grid gap-2 text-sm">
+                <div className="flex justify-between"><dt className="text-ink-2">Despesas em conta</dt><dd><Money value={consumption.parts.expense} /></dd></div>
+                <div className="flex justify-between"><dt className="text-ink-2">Compras no cartão</dt><dd><Money value={consumption.parts.installment} /></dd></div>
+                {consumption.parts.fee !== 0 && <div className="flex justify-between"><dt className="text-ink-2">Tarifas</dt><dd><Money value={consumption.parts.fee} /></dd></div>}
+                {consumption.parts.card_refund !== 0 && <div className="flex justify-between"><dt className="text-ink-2">Estornos no cartão</dt><dd><Money value={consumption.parts.card_refund} /></dd></div>}
+                {consumption.parts.account_refund !== 0 && <div className="flex justify-between"><dt className="text-ink-2">Reembolsos recebidos</dt><dd><Money value={consumption.parts.account_refund} /></dd></div>}
+                <div className="flex justify-between border-t border-border pt-3"><dt className="font-medium">Consumo</dt><dd data-testid="consumption-total"><Money value={consumption.total} className="font-semibold" /></dd></div>
+              </dl>
+              <p className="text-xs text-ink-3">Mesma conta do gráfico de categorias, com o mesmo mês e categoria. Parcelas canceladas, estornos e reembolsos já estão descontados; o que ainda não aconteceu fica de fora.</p>
+            </Panel>
+          )}
           {owed.size > 0 && (
             <Panel className="grid gap-3">
               <div className="flex items-baseline justify-between gap-3">

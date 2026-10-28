@@ -45,7 +45,9 @@ test("resumo do mês ignora pendentes e transferências e inclui compras no cré
   await page.goto("/dev/preview/lancamentos");
   const resumo = page.getByRole("complementary");
   await expect(resumo.getByText("R$ 812,68")).toBeVisible(); // só o salário realizado
-  await expect(resumo.getByText("R$ 411,40")).toBeVisible(); // 87,90 + 23,50 + compra no crédito de 300,00
+  const despesas = resumo.getByText("Despesas", { exact: true }).locator("xpath=following-sibling::dd");
+  await expect(despesas).toHaveText("R$ 411,40"); // 87,90 + 23,50 + compra no crédito de 300,00
+  await expect(resumo.getByTestId("consumption-total")).toHaveText("R$ 411,40"); // o painel Consumo fecha com o resumo
 });
 
 test("contas: total, ajustar saldo e nova conta", async ({ page }) => {

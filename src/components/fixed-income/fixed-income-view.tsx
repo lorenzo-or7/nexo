@@ -10,14 +10,17 @@ import { KIND_LABEL, type FixedIncomeKind, type FixedIncomeTotals } from "@/doma
 import { formatBRL, type Cents } from "@/domain/money";
 import type { QuickEntryData } from "@/lib/data/ledger";
 import { cn } from "@/lib/cn";
-import { FixedIncomeEditor, FixedStatusButton, RemoveFixedIncomeButton, type FixedIncomeItem } from "./fixed-income-dialogs";
+import { EndFixedIncomeButton, FixedIncomeEditor, FixedStatusButton, RemoveFixedIncomeButton, type FixedIncomeItem } from "./fixed-income-dialogs";
 
-type Tab = "all" | FixedIncomeKind;
+type Tab = "all" | FixedIncomeKind | "ended";
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "Todas" },
   { key: "salary", label: "Salário" },
   { key: "client", label: "Clientes" },
+  { key: "ended", label: "Encerradas" },
 ];
+/** As abas de uso normal só mostram rendas ativas ou pausadas; as encerradas ficam no histórico. */
+const inTab = (i: FixedIncomeItem, t: Tab) => (t === "ended" ? i.status === "ended" : i.status !== "ended" && (t === "all" || i.kind === t));
 
 function when(days: number | null): string {
   if (days === null) return "";
@@ -43,9 +46,9 @@ export function FixedIncomeView({
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<{ item?: FixedIncomeItem; kind?: FixedIncomeKind } | null>(openNew ? {} : null);
   const shown = items
-    .filter((i) => tab === "all" || i.kind === tab)
+    .filter((i) => inTab(i, tab))
     .sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || (a.nextDate ?? "9999").localeCompare(b.nextDate ?? "9999") || a.name.localeCompare(b.name));
-  const count = (t: Tab) => items.filter((i) => t === "all" || i.kind === t).length;
+  const count = (t: Tab) => items.filter((i) => inTab(i, t)).length;
   const hasSalary = items.some((i) => i.kind === "salary");
 
   const newButton = (
@@ -89,9 +92,9 @@ export function FixedIncomeView({
             </div>
           </Panel>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="min-w-0">
-              <div role="tablist" aria-label="Tipo de renda" className="panel-quiet mb-6 inline-flex gap-1 rounded-full p-1">
+              <div role="tablist" aria-label="Tipo de renda" className="panel-quiet mb-6 flex w-full max-w-full gap-1 overflow-x-auto rounded-full p-1 sm:inline-flex sm:w-auto">
                 {TABS.map((t) => (
                   <button
                     key={t.key}
@@ -99,21 +102,21 @@ export function FixedIncomeView({
                     type="button"
                     aria-selected={tab === t.key}
                     onClick={() => setTab(t.key)}
-                    className={cn("h-9 rounded-full px-4 text-sm font-medium transition-colors", tab === t.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
+                    className={cn("h-9 shrink-0 flex-1 rounded-full px-2.5 text-[0.8125rem] font-medium sm:text-sm transition-colors sm:flex-none sm:px-4", tab === t.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
                   >
                     {t.label}
-                    <span className={cn("ml-1.5 tabular text-xs", tab === t.key ? "opacity-80" : "text-ink-3")}>{count(t.key)}</span>
+                    <span className={cn("ml-1 tabular text-xs sm:ml-1.5", tab === t.key ? "opacity-80" : "text-ink-3")}>{count(t.key)}</span>
                   </button>
                 ))}
               </div>
 
               {shown.length === 0 ? (
-                <p className="text-ink-3">Nada aqui.</p>
+                <p className="text-ink-3">{tab === "ended" ? "Nenhuma renda encerrada." : "Nada aqui."}</p>
               ) : (
                 <ul className="grid grid-cols-1 gap-5 2xl:grid-cols-2">
                   {shown.map((s) => (
                     <li key={s.id} className="min-w-0">
-                      <Panel className={cn("relative flex h-full flex-col gap-4 overflow-hidden p-5", s.status !== "active" && "opacity-75")} data-testid="fixed-income">
+                      <Panel className={cn("relative flex h-full flex-col gap-4 overflow-hidden p-5", s.status === "paused" && "opacity-75")} data-testid="fixed-income">
                         <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full opacity-25 blur-2xl" style={{ background: s.color }} />
                         <div className="relative flex items-start gap-3">
                           <span className="grid size-11 shrink-0 place-items-center rounded-xl text-white" style={{ background: `linear-gradient(135deg, ${s.color}, color-mix(in oklab, ${s.color} 55%, black))` }}>
@@ -168,6 +171,7 @@ export function FixedIncomeView({
                             )}
                             {s.status === "active" && <FixedStatusButton item={s} action="pause" />}
                             {s.status === "paused" && <FixedStatusButton item={s} action="resume" />}
+                            {s.status !== "ended" && <EndFixedIncomeButton item={s} />}
                             <RemoveFixedIncomeButton item={s} />
                           </div>
                         </div>
@@ -188,7 +192,7 @@ export function FixedIncomeView({
               {upcoming.length === 0 ? (
                 <p className="text-sm text-ink-3">Nada previsto.</p>
               ) : (
-                <ol className="grid">
+                <ol className="grid grid-cols-[minmax(0,1fr)]">
                   {upcoming.map((u) => (
                     <li key={u.id} className="flex items-center gap-3 border-t border-border py-3 first:border-t-0 first:pt-0">
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-ink-2">

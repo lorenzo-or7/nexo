@@ -107,10 +107,14 @@ export function buildTransfer(input: {
 
 // ------------------------------------------------------ análise de consumo
 
+export type SpendingPart = "expense" | "installment" | "fee" | "card_refund" | "account_refund";
+
 export interface SpendingLine {
   categoryId: string | null;
   amount: Cents; // positivo = gasto
   source: "account" | "card";
+  /** de onde vem a linha: serve para mostrar a conta que fecha (consumo = despesas + parcelas + tarifas − estornos − reembolsos) */
+  part: SpendingPart;
   date: LocalDate;
   accountOrCardId: string;
 }
@@ -131,13 +135,14 @@ export function spendingLines(
   const lines: SpendingLine[] = [];
   for (const e of entries) {
     if (e.status !== "confirmed" || e.hypothetical || !inRange(e.date)) continue;
-    if (e.kind === "expense") lines.push({ categoryId: e.categoryId ?? null, amount: -e.amount as Cents, source: "account", date: e.date, accountOrCardId: e.accountId });
-    if (e.kind === "refund") lines.push({ categoryId: e.categoryId ?? null, amount: -e.amount as Cents, source: "account", date: e.date, accountOrCardId: e.accountId });
+    if (e.kind === "expense") lines.push({ categoryId: e.categoryId ?? null, amount: -e.amount as Cents, source: "account", part: "expense", date: e.date, accountOrCardId: e.accountId });
+    if (e.kind === "refund") lines.push({ categoryId: e.categoryId ?? null, amount: -e.amount as Cents, source: "account", part: "account_refund", date: e.date, accountOrCardId: e.accountId });
   }
   for (const c of charges) {
-    if (c.cancelled || c.hypothetical || !inRange(c.date)) continue;
+    if (c.cancelled || c.hypothetical || c.projected || !inRange(c.date)) continue;
     if (c.kind === "installment" || c.kind === "refund" || c.kind === "fee") {
-      lines.push({ categoryId: c.categoryId ?? null, amount: c.amount, source: "card", date: c.date, accountOrCardId: c.cardId });
+      const part: SpendingPart = c.kind === "installment" ? "installment" : c.kind === "fee" ? "fee" : "card_refund";
+      lines.push({ categoryId: c.categoryId ?? null, amount: c.amount, source: "card", part, date: c.date, accountOrCardId: c.cardId });
     }
   }
   return lines;

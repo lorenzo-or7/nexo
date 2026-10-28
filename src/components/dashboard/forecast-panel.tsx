@@ -7,6 +7,7 @@ import { formatDateBR } from "@/domain/dates";
 import { formatBRL } from "@/domain/money";
 import { cn } from "@/lib/cn";
 import { FinanceCharts } from "./finance-charts-lazy";
+import { IndicatorTrigger } from "./indicator-detail";
 import { Segmented, useStoredPref } from "./segmented";
 
 type Mode = "confirmed" | "all";
@@ -49,12 +50,15 @@ export function ForecastPanel({ model }: { model: DashboardModel }) {
 
       <div className="mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div>
-          <p
-            data-testid="free-to-spend"
-            className={cn("text-[2.875rem] font-semibold leading-none tracking-[-0.05em] sm:text-[3.75rem]", sc.free < 0 ? "text-negative" : "text-hero")}
-          >
-            <Money value={sc.free} />
-          </p>
+          <IndicatorTrigger k="free" mode={mode}>
+            <p
+              data-testid="free-to-spend"
+              className={cn("text-[2.875rem] font-semibold leading-none tracking-[-0.05em] sm:text-[3.75rem]", sc.free < 0 ? "text-negative" : "text-hero")}
+            >
+              <Money value={sc.free} />
+            </p>
+            <span className="mt-1 block text-xs text-accent">Ver como é calculado</span>
+          </IndicatorTrigger>
           <p className="mt-3 max-w-md text-sm text-ink-3">
             É o menor saldo previsto no período{reserve > 0 ? `, já descontada a reserva de ${formatBRL(reserve)}` : ""}. Gastar mais do que isso hoje deixaria algum dia no vermelho.
           </p>
@@ -67,14 +71,14 @@ export function ForecastPanel({ model }: { model: DashboardModel }) {
           </p>
         </div>
         <div className="flex gap-3 text-sm">
-          <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
+          <IndicatorTrigger k="lowest" mode={mode} className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5 hover:border-accent">
             <p className="text-xs text-ink-3">Menor saldo · {short(sc.lowestDate)}</p>
             <p className="mt-0.5 font-semibold"><Money value={sc.lowest} /></p>
-          </div>
-          <div className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5">
+          </IndicatorTrigger>
+          <IndicatorTrigger k="end" mode={mode} className="rounded-xl border border-border bg-field/50 px-3.5 py-2.5 hover:border-accent">
             <p className="text-xs text-ink-3">Fim do período</p>
             <p className="mt-0.5 font-semibold"><Money value={sc.projected} /></p>
-          </div>
+          </IndicatorTrigger>
         </div>
       </div>
 

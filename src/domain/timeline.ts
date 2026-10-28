@@ -23,6 +23,9 @@ export interface TimelineEvent {
   status: TimelineStatus;
   source: "entry" | "invoice" | "simulation";
   refId: string;
+  /** tipo do lançamento em conta (só para source "entry") */
+  kind?: string;
+  accountId?: string;
   /** data original quando o evento foi movido para hoje por atraso */
   originalDate?: LocalDate;
 }
@@ -111,6 +114,8 @@ export function buildTimeline(input: TimelineInput): TimelineResult {
       status: late ? "late" : e.status === "expected" ? "expected" : "confirmed",
       source: "entry",
       refId: e.id,
+      kind: e.kind,
+      accountId: e.accountId,
     });
   }
 

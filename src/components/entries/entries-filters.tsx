@@ -21,6 +21,7 @@ export function EntriesFilters({ accounts, categories, today }: { accounts: Acco
     const next = new URLSearchParams(sp.toString());
     if (value) next.set(key, value);
     else next.delete(key);
+    if (key === "categoria") next.delete("sem_sub"); // trocar a categoria desfaz o recorte "sem subcategoria"
     start(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   };
 
@@ -32,7 +33,7 @@ export function EntriesFilters({ accounts, categories, today }: { accounts: Acco
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const active = ["mes", "conta", "tipo", "categoria", "q"].some((k) => sp.get(k));
+  const active = ["mes", "conta", "tipo", "categoria", "sem_sub", "q"].some((k) => sp.get(k));
   const month = sp.get("mes") ?? "";
   // de 2 meses à frente até 3 anos atrás (inclui o mês escolhido se estiver fora)
   const monthOptions = Array.from({ length: 39 }, (_, i) => addMonthRef(today.slice(0, 7), 2 - i));
@@ -104,6 +105,7 @@ export function EntriesFilters({ accounts, categories, today }: { accounts: Acco
           onValueChange={(v) => set("categoria", v)}
           options={[
             { value: "", label: "Todas as categorias" },
+            { value: "none", label: "Sem categoria" },
             ...(["expense", "income"] as const).flatMap((k) =>
               categoryTree(categories, k).flatMap(({ parent, children }) => [
                 { value: parent.id, label: `${parent.name} (tudo)`, group: `${parent.name} · ${k === "expense" ? "despesa" : "receita"}`, color: categoryColor(parent, categories) },
@@ -119,6 +121,17 @@ export function EntriesFilters({ accounts, categories, today }: { accounts: Acco
           <Tags className="size-4" />
           Categorias
         </Link>
+        {sp.get("sem_sub") === "1" && (
+          <button
+            type="button"
+            onClick={() => set("sem_sub", "")}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-accent px-3.5 text-sm text-ink"
+            aria-label="Remover filtro: sem subcategoria"
+          >
+            Sem subcategoria
+            <X className="size-4" />
+          </button>
+        )}
         {active && (
           <button
             type="button"

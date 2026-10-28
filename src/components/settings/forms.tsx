@@ -1,11 +1,11 @@
 "use client";
-import { useActionState, useEffect } from "react";
-import { Download } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
 import { MoneyInput } from "@/components/ui/money-input";
 import { useToast } from "@/components/ui/toast";
+import { DELETE_ACCOUNT_PHRASE } from "@/lib/data-management";
 import { clearDemo, deleteAccount, loadDemo, saveProfile, type ActionResult } from "@/app/(app)/actions";
 
 function useResultToast(state: ActionResult) {
@@ -99,29 +99,31 @@ export function ProfileForm({
   );
 }
 
-export function ExportButton() {
-  return (
-    <Button asChild variant="outline" className="justify-self-start">
-      <a href="/api/export" download>
-        <Download />
-        Exportar meus dados
-      </a>
-    </Button>
-  );
-}
-
 export function DeleteAccountForm() {
   const [state, action, pending] = useActionState<ActionResult, FormData>(deleteAccount, undefined);
+  const [phrase, setPhrase] = useState("");
+  const [password, setPassword] = useState("");
+  const [understood, setUnderstood] = useState(false);
+  // conveniência: o servidor confere tudo de novo
+  const ready = phrase === DELETE_ACCOUNT_PHRASE && understood && password.length > 0;
   return (
-    <form action={action} className="grid gap-4">
+    <form action={action} className="grid gap-4" data-testid="delete-account-form">
       {state && !state.ok && <FormMessage tone="error">{state.error}</FormMessage>}
       <p className="text-sm text-ink-2">
-        Apaga permanentemente sua conta e todos os dados: contas, cartões, lançamentos, assinaturas e histórico. Exporte antes se quiser guardar uma cópia.
+        Apaga <strong>permanentemente</strong> seu login e todos os dados: contas, cartões, lançamentos, assinaturas e histórico. Não há como desfazer.
+        Exporte antes em &ldquo;Gerenciamento de dados&rdquo; se quiser guardar uma cópia.
       </p>
-      <Field label="Digite EXCLUIR para confirmar" htmlFor="confirm">
-        <Input id="confirm" name="confirm" autoComplete="off" className="max-w-xs" />
+      <Field label={`Digite ${DELETE_ACCOUNT_PHRASE} para confirmar`} htmlFor="confirm">
+        <Input id="confirm" name="confirm" autoComplete="off" value={phrase} onChange={(e) => setPhrase(e.target.value)} className="max-w-xs" />
       </Field>
-      <Button type="submit" variant="danger" loading={pending} className="justify-self-start">Excluir conta e dados</Button>
+      <Field label="Sua senha atual" htmlFor="delete-password">
+        <Input id="delete-password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="max-w-xs" />
+      </Field>
+      <label className="flex items-start gap-2 text-sm text-ink-2">
+        <input type="checkbox" name="understood" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} className="mt-0.5 size-4 accent-[var(--accent)]" />
+        <span>Entendo que a exclusão da conta é permanente e irreversível.</span>
+      </label>
+      <Button type="submit" variant="danger" loading={pending} disabled={!ready} className="h-auto min-h-11 justify-self-start whitespace-normal py-2.5 text-center">Excluir conta e dados</Button>
     </form>
   );
 }

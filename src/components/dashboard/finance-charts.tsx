@@ -1,5 +1,6 @@
 "use client";
-import { BarChart3, ChartArea, ChartLine, ChartPie, Eye, EyeOff, Table2 } from "lucide-react";
+import { ArrowLeft, BarChart3, ChartArea, ChartLine, ChartPie, Eye, EyeOff, Table2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { Segmented, usePref } from "./segmented";
 import {
@@ -28,6 +29,15 @@ import { cn } from "@/lib/cn";
 type View = "saldo" | "fluxo" | "categorias" | "receber" | "pagar";
 type SaldoStyle = "area" | "bars";
 type FluxoStyle = "grouped" | "stacked" | "lines";
+interface CatRow {
+  key: string;
+  id: string | null;
+  name: string;
+  value: number;
+  color: string;
+  pct: number;
+  kind: "cat" | "rest" | "sub";
+}
 type CatStyle = "donut" | "bars";
 
 const C = {
@@ -183,6 +193,10 @@ export function FinanceCharts({
   const [showExpenses, setShowExpenses] = useState(true);
   const [table, setTable] = useState(false);
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  // drill-down: [] = categorias; [id] = subcategorias de id; ["__rest"] = as categorias agrupadas em "Outras"
+  const [trail, setTrail] = useState<string[]>([]);
+  const router = useRouter();
+  const pathname = usePathname();
 
   const hasExpected = chart.expectedIncome.length > 0;
   const expectedTotal = chart.expectedIncome.reduce((t, e) => t + e.amount, 0);
@@ -234,13 +248,41 @@ export function FinanceCharts({
     [buckets.rows],
   );
 
+  const tree = model.categoryTree;
   const catTotal = byCategory.reduce((t, c) => t + c.amount, 0);
-  const catRows = useMemo(() => {
-    const top = byCategory.slice(0, 7).map((c) => ({ name: c.name, value: c.amount / 100, color: c.color, pct: catTotal ? Math.round((c.amount / catTotal) * 100) : 0 }));
-    const rest = byCategory.slice(7).reduce((t, c) => t + c.amount, 0);
-    if (rest > 0) top.push({ name: "Outras", value: rest / 100, color: "#5C677D", pct: catTotal ? Math.round((rest / catTotal) * 100) : 0 });
+  const keyOfCat = (id: string | null) => id ?? "__none";
+  const toRow = (c: { id: string | null; name: string; color: string; amount: number }, base: number, kind: CatRow["kind"], key = keyOfCat(c.id)): CatRow => ({
+    key, id: c.id, name: c.name, value: c.amount / 100, color: c.color, pct: base ? Math.round((c.amount / base) * 100) : 0, kind,
+  });
+  const current = trail.length ? trail[trail.length - 1] : null;
+  const drilled = current && current !== "__rest" ? tree.find((c) => keyOfCat(c.id) === current) ?? null : null;
+  const catRows: CatRow[] = useMemo(() => {
+    if (drilled) return drilled.subs.map((x) => toRow(x, drilled.amount, "sub", `${keyOfCat(drilled.id)}/${keyOfCat(x.id)}`));
+    if (current === "__rest") return tree.slice(7).map((c) => toRow(c, catTotal, "cat"));
+    const top = tree.slice(0, 7).map((c) => toRow(c, catTotal, "cat"));
+    const rest = tree.slice(7).reduce((t, c) => t + c.amount, 0);
+    if (rest > 0) top.push({ key: "__rest", id: null, name: "Outras", value: rest / 100, color: "#5C677D", pct: catTotal ? Math.round((rest / catTotal) * 100) : 0, kind: "rest" });
     return top;
-  }, [byCategory, catTotal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree, catTotal, current, drilled]);
+  // total do nível exibido (o centro da rosca e o cabeçalho)
+  const levelTotal = drilled ? drilled.amount : current === "__rest" ? tree.slice(7).reduce((t, c) => t + c.amount, 0) : catTotal;
+  const lancamentosPath = pathname.startsWith("/dev/preview") ? "/dev/preview/lancamentos" : "/lancamentos";
+  const pickCat = (row: CatRow) => {
+    setActiveCat(null);
+    if (row.kind === "rest" || row.kind === "cat") {
+      setTrail((t) => [...t, row.key]);
+      return;
+    }
+    // nível 3: abre os lançamentos da (sub)categoria, no mesmo mês do gráfico
+    const q = new URLSearchParams({ mes: model.categoryMonth, tipo: "expense" });
+    if (drilled?.id === null) q.set("categoria", "none");
+    else if (row.id === null) {
+      q.set("categoria", drilled!.id!);
+      q.set("sem_sub", "1");
+    } else q.set("categoria", row.id);
+    router.push(`${lancamentosPath}?${q.toString()}`);
+  };
 
   const fluxoTotals = useMemo(() => {
     const conf = buckets.rows.reduce((t, b) => t + b.incomeConfirmed, 0);
@@ -396,9 +438,21 @@ export function FinanceCharts({
         )}
       </ul>
 
-      <div className="mt-3 min-w-0">
+      {view === "categorias" && !table && trail.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="cat-drill-header">
+          <button type="button" onClick={() => setTrail((t) => t.slice(0, -1))} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-ink-2 hover:text-ink">
+            <ArrowLeft className="size-4" />
+            Voltar
+          </button>
+          <p className="min-w-0 text-sm">
+            <span className="font-semibold">{drilled ? drilled.name : "Outras categorias"}</span>
+            <span className="text-ink-3"> · {brl(levelTotal / 100)}{drilled ? " · toque numa subcategoria para ver os lançamentos" : ""}</span>
+          </p>
+        </div>
+      )}
+      <div key={`${view}-${trail.join("/")}`} className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out]">
         {table ? (
-          <DataTable view={view} saldo={saldoData} buckets={buckets} cats={catRows} receber={receberData} showExpected={showExpected && hasExpected} />
+          <DataTable view={view} saldo={saldoData} buckets={buckets} cats={catRows} onPickCat={pickCat} receber={receberData} showExpected={showExpected && hasExpected} />
         ) : view === "saldo" ? (
           <div className="h-56 w-full sm:h-64" role="img" aria-label={description}>
             <ResponsiveContainer width="100%" height="100%">
@@ -679,30 +733,30 @@ export function FinanceCharts({
             <div className="relative mx-auto h-56 w-56" role="img" aria-label={description}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={catRows} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="94%" paddingAngle={2} stroke="var(--surface)" strokeWidth={2} isAnimationActive={false} onMouseEnter={(_, i) => setActiveCat(catRows[i]?.name ?? null)} onMouseLeave={() => setActiveCat(null)}>
-                    {catRows.map((c) => <Cell key={c.name} fill={c.color} fillOpacity={activeCat && activeCat !== c.name ? 0.3 : 1} style={{ cursor: "pointer", outline: "none" }} />)}
+                  <Pie data={catRows} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="94%" paddingAngle={2} stroke="var(--surface)" strokeWidth={2} isAnimationActive={false} onMouseEnter={(_, i) => setActiveCat(catRows[i]?.key ?? null)} onMouseLeave={() => setActiveCat(null)} onClick={(_, i) => catRows[i] && pickCat(catRows[i])}>
+                    {catRows.map((c) => <Cell key={c.key} fill={c.color} fillOpacity={activeCat && activeCat !== c.key ? 0.3 : 1} style={{ cursor: "pointer", outline: "none" }} />)}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
                 {(() => {
-                  const a = catRows.find((c) => c.name === activeCat);
+                  const a = catRows.find((c) => c.key === activeCat);
                   return a ? (
                     <div className="max-w-[8rem]">
                       <p className="truncate text-xs font-medium" style={{ color: "var(--ink-2)" }}>{a.name}</p>
                       <p className="tabular text-lg font-semibold">{brl(a.value)}</p>
-                      <p className="text-xs text-ink-3">{a.pct}% das despesas</p>
+                      <p className="text-xs text-ink-3">{a.pct}% {drilled ? `de ${drilled.name}` : "das despesas"}</p>
                     </div>
                   ) : (
-                    <div>
-                      <p className="text-xs text-ink-3">Despesas do mês</p>
-                      <p className="tabular text-lg font-semibold">{brl(catTotal / 100)}</p>
+                    <div className="max-w-[8rem]">
+                      <p className="truncate text-xs text-ink-3">{drilled ? drilled.name : current === "__rest" ? "Outras categorias" : "Despesas do mês"}</p>
+                      <p className="tabular text-lg font-semibold">{brl(levelTotal / 100)}</p>
                     </div>
                   );
                 })()}
               </div>
             </div>
-            <CatLegend rows={catRows} active={activeCat} onActive={setActiveCat} />
+            <CatLegend rows={catRows} active={activeCat} onActive={setActiveCat} onPick={pickCat} />
           </div>
         ) : (
           <div style={{ height: Math.max(180, catRows.length * 40 + 16) }} className="w-full" role="img" aria-label={description}>
@@ -712,8 +766,8 @@ export function FinanceCharts({
                 <XAxis type="number" tickFormatter={compact} tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" width={96} tick={{ fill: "var(--ink-2)", fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip wrapperStyle={TIP_STYLE} cursor={{ fill: "var(--surface-2)", fillOpacity: 0.5 }} content={(p) => <CatTip p={p} />} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false}>
-                  {catRows.map((c) => <Cell key={c.name} fill={c.color} />)}
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false} onClick={(_, i) => catRows[i] && pickCat(catRows[i])} style={{ cursor: "pointer" }}>
+                  {catRows.map((c) => <Cell key={c.key} fill={c.color} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -814,19 +868,26 @@ function CatTip({ p }: { p: TooltipContentProps }) {
   );
 }
 
-function CatLegend({ rows, active, onActive }: { rows: { name: string; value: number; color: string; pct: number }[]; active: string | null; onActive: (n: string | null) => void }) {
+function CatLegend({ rows, active, onActive, onPick }: { rows: CatRow[]; active: string | null; onActive: (k: string | null) => void; onPick: (r: CatRow) => void }) {
   return (
-    <ul className="grid gap-1">
+    <ul className="grid min-w-0 gap-1">
       {rows.map((c) => (
-        <li key={c.name} onMouseEnter={() => onActive(c.name)} onMouseLeave={() => onActive(null)} className={cn("flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-sm transition-opacity", active && active !== c.name && "opacity-40", active === c.name && "bg-surface-2")}>
-          <span className="flex min-w-0 items-center gap-2.5">
-            <span aria-hidden className="size-3 shrink-0 rounded-[4px]" style={{ background: c.color }} />
-            <span className="truncate text-ink-2">{c.name}</span>
-          </span>
-          <span className="flex shrink-0 items-baseline gap-2">
-            <span className="tabular font-medium">{brl(c.value)}</span>
-            <span className="tabular w-9 text-right text-xs text-ink-3">{c.pct}%</span>
-          </span>
+        <li key={c.key} onMouseEnter={() => onActive(c.key)} onMouseLeave={() => onActive(null)} className={cn("transition-opacity", active && active !== c.key && "opacity-40")}>
+          <button
+            type="button"
+            onClick={() => onPick(c)}
+            aria-label={c.kind === "sub" ? `Ver lançamentos de ${c.name}` : c.kind === "rest" ? "Ver as outras categorias" : `Ver subcategorias de ${c.name}`}
+            className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left text-sm", active === c.key && "bg-surface-2")}
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span aria-hidden className="size-3 shrink-0 rounded-[4px]" style={{ background: c.color }} />
+              <span className="truncate text-ink-2">{c.name}</span>
+            </span>
+            <span className="flex shrink-0 items-baseline gap-2">
+              <span className="tabular font-medium">{brl(c.value)}</span>
+              <span className="tabular w-9 text-right text-xs text-ink-3">{c.pct}%</span>
+            </span>
+          </button>
         </li>
       ))}
     </ul>
@@ -838,6 +899,7 @@ function DataTable({
   saldo,
   buckets,
   cats,
+  onPickCat,
   receber,
   showExpected,
 }: {
@@ -845,7 +907,8 @@ function DataTable({
   receber: { date: string; incomeConfirmed: number; incomeExpected: number; cumTotal: number }[];
   saldo: { date: string; main: number; incomeConfirmed: number; incomeExpected: number; expenses: number; balanceConfirmed: number }[];
   buckets: ReturnType<typeof bucketize>;
-  cats: { name: string; value: number; pct: number }[];
+  cats: CatRow[];
+  onPickCat: (r: CatRow) => void;
   showExpected: boolean;
 }) {
   const th = "px-3 py-2 text-left text-xs font-medium text-ink-3";
@@ -907,8 +970,10 @@ function DataTable({
             ))}
           {view === "categorias" &&
             cats.map((c) => (
-              <tr key={c.name} className="border-t border-border">
-                <td className={td}>{c.name}</td>
+              <tr key={c.key} className="border-t border-border">
+                <td className={td}>
+                  <button type="button" onClick={() => onPickCat(c)} className="text-left underline-offset-2 hover:underline">{c.name}</button>
+                </td>
                 <td className={td}>{brl(c.value)}</td>
                 <td className={td}>{c.pct}%</td>
               </tr>

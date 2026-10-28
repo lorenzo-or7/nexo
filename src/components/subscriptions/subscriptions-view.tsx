@@ -151,7 +151,7 @@ export function SubscriptionsView({
             </div>
           )}
 
-          <div role="tablist" aria-label="Situação" className="panel-quiet mb-6 inline-flex gap-1 rounded-full p-1">
+          <div role="tablist" aria-label="Situação" className="panel-quiet mb-6 flex w-full max-w-full gap-1 overflow-x-auto rounded-full p-1 sm:inline-flex sm:w-auto">
             {TABS.map((x) => (
               <button
                 key={x.key}
@@ -159,10 +159,10 @@ export function SubscriptionsView({
                 type="button"
                 aria-selected={tab === x.key}
                 onClick={() => setTab(x.key)}
-                className={cn("h-9 rounded-full px-4 text-sm font-medium transition-colors", tab === x.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
+                className={cn("h-9 shrink-0 flex-1 rounded-full px-2.5 text-[0.8125rem] font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm", tab === x.key ? "btn-glow" : "text-ink-2 hover:text-ink")}
               >
                 {x.label}
-                <span className={cn("ml-1.5 tabular text-xs", tab === x.key ? "opacity-80" : "text-ink-3")}>{count(x.key)}</span>
+                <span className={cn("ml-1 tabular text-xs sm:ml-1.5", tab === x.key ? "opacity-80" : "text-ink-3")}>{count(x.key)}</span>
               </button>
             ))}
           </div>
