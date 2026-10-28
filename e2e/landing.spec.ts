@@ -74,7 +74,8 @@ test("[landing] tema claro/escuro alterna e persiste ao recarregar", async ({ pa
   await page.goto("/");
   const html = page.locator("html");
   await expect(html).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("button", { name: /Ativar modo claro/ }).click();
+  await page.getByRole("button", { name: "Aparência: modo e cores" }).click();
+  await page.getByRole("radio", { name: "Claro" }).click();
   await expect(html).toHaveAttribute("data-theme", "light");
   await page.waitForTimeout(800); // deixa a action gravar o cookie
   await page.reload();
