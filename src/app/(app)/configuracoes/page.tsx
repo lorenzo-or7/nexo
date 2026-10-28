@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Repeat, Tags } from "lucide-react";
 import { PageHeader } from "@/components/shell/app-shell";
 import { AppearanceForm } from "@/components/settings/appearance";
-import { DeleteAccountForm, DemoClear, DemoLoader, ExportButton, ProfileForm } from "@/components/settings/forms";
+import { DataManagement } from "@/components/settings/data-management";
+import { DeleteAccountForm, DemoClear, DemoLoader, ProfileForm } from "@/components/settings/forms";
 import { Panel, PanelHeader } from "@/components/ui/card";
 import { formatBRL, type Cents } from "@/domain/money";
 import { loadProfile } from "@/lib/data/finance";
@@ -64,8 +65,8 @@ export default async function SettingsPage() {
           {hasDemo ? <DemoClear /> : <DemoLoader />}
         </Panel>
         <Panel>
-          <PanelHeader title="Exportar dados" description="Um arquivo JSON com tudo o que está na sua conta." />
-          <ExportButton />
+          <PanelHeader title="Gerenciamento de dados" description="Exporte, recomece o histórico ou limpe tudo. Só os seus dados são afetados." />
+          <DataManagement />
         </Panel>
         <Panel className="border-[color-mix(in_oklab,var(--negative)_30%,var(--border))]">
           <PanelHeader title="Excluir conta" />

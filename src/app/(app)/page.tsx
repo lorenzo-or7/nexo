@@ -9,12 +9,13 @@ import { syncFixedIncome } from "@/lib/data/fixed-income";
 import { syncSubscriptions } from "@/lib/data/subscriptions";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { CLEAR_ALL_DONE } from "@/lib/data-management";
 
 export const metadata: Metadata = { title: "Visão geral" };
 
 const HORIZONS = ["month", "30", "60", "90"] as const;
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ h?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ h?: string; limpo?: string }> }) {
   const sp = await searchParams;
   const horizon = (HORIZONS as readonly string[]).includes(sp.h ?? "") ? (sp.h as (typeof HORIZONS)[number]) : "month";
   const supabase = await createClient();
@@ -28,13 +29,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       horizon={horizon}
       name={profile.display_name?.split(" ")[0] ?? "você"}
       demoNotice={
-        model.hasDemo ? (
+        sp.limpo === "1" ? (
+          <p role="status" className="mb-6 rounded-xl bg-positive-soft px-4 py-3 text-sm text-positive">{CLEAR_ALL_DONE}</p>
+        ) : model.hasDemo ? (
           <p className="mb-6 rounded-xl border border-dashed border-border-strong px-4 py-3 text-sm text-ink-2">
             Você está vendo dados de demonstração. Remova-os em <Link href="/configuracoes" className="font-medium text-accent underline-offset-4 hover:underline">Configurações</Link> quando quiser.
           </p>
         ) : undefined
       }
       emptyState={
+        <>
+        {sp.limpo === "1" && <p role="status" className="mb-6 max-w-2xl rounded-xl bg-positive-soft px-4 py-3 text-sm text-positive">{CLEAR_ALL_DONE}</p>}
         <Panel className="max-w-2xl">
           <h2 className="text-xl font-semibold tracking-tight">Tudo zerado, pronto para começar</h2>
           <p className="mt-2 text-ink-2">
@@ -49,6 +54,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </Button>
           </div>
         </Panel>
+        </>
       }
     />
   );

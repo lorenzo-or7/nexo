@@ -22,6 +22,8 @@ export interface FixedIncome {
   startDate: LocalDate;
   endDate: LocalDate | null;
   status: FixedIncomeStatus;
+  /** depois de "limpar lançamentos": nada antes (e nesta data) é recriado pela recorrência */
+  clearedBefore?: LocalDate | null;
 }
 
 export interface FixedOccurrence {
@@ -45,7 +47,9 @@ export function fixedOccurrences(f: FixedIncome, from: LocalDate, to: LocalDate)
 
 /** Meses que já venceram e ainda não viraram lançamento (últimos BACKFILL_DAYS até hoje). */
 export function fixedDueToRecord(f: FixedIncome, today: LocalDate, existing: ReadonlySet<string>): FixedOccurrence[] {
-  return fixedOccurrences(f, addDays(today, -BACKFILL_DAYS), today).filter((o) => !existing.has(o.periodKey));
+  const window = addDays(today, -BACKFILL_DAYS);
+  const from = f.clearedBefore && addDays(f.clearedBefore, 1) > window ? addDays(f.clearedBefore, 1) : window;
+  return fixedOccurrences(f, from, today).filter((o) => !existing.has(o.periodKey));
 }
 
 /** Meses futuros (depois de hoje) para a projeção do saldo. */

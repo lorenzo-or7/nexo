@@ -685,3 +685,107 @@ describe("renda fixa", () => {
     expect(res.r).toBe("deleted");
   });
 });
+
+describe("gerenciamento de dados: exportar, limpar lançamentos, limpar tudo", () => {
+  const CAROL = "33333333-3333-4333-8333-333333333333";
+
+  /** Cenário fictício completo: conta, cartão, compra parcelada, pagamento, assinatura, renda fixa, meta. */
+  async function seed(uid: string, label: string) {
+    const acc = await newAccount(uid, `Conta ${label}`, 100000);
+    const card = await as(uid, async () => (await one<{ id: string }>(
+      `insert into cards (name, closing_day, due_day, payment_account_id, limit_cents) values ('Cartão ${label}', 13, 20, $1, 500000) returning id`, [acc])).id);
+    await as(uid, () => q(`select create_credit_purchase($1, 'Compra ${label}', null, '2026-10-05', 8500, $2::jsonb)`, [
+      card, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 4250 }, { number: 2, invoice_ref: "2026-11", amount_cents: 4250 }]),
+    ]));
+    await as(uid, () => q(`select pay_invoice($1, '2026-10', $2, 1000, '2026-10-20')`, [card, acc]));
+    await as(uid, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on, description) values ($1, 'expense', 'confirmed', -2500, '2026-10-03', 'Mercado ${label}')`, [acc]));
+    const sub = (await as(uid, () => one<{ id: string }>(
+      `select save_subscription(null, 'Streaming ${label}', null, 'monthly', 1::smallint, '2026-08-15'::date, 'account', null, $1, 3990, null) as id`, [acc]))).id;
+    await as(uid, () => q(`select record_subscription_charge($1, '2026-09', '2026-09-15', 3990, null, 'confirmed')`, [sub]));
+    const fi = (await as(uid, () => one<{ id: string }>(
+      `select save_fixed_income(null, 'salary', 'Salário ${label}', null, 500000, 5::smallint, '2026-08-05', null, $1, null, null) as id`, [acc]))).id;
+    await as(uid, () => q(`insert into goals (name, target_cents) values ('Viagem ${label}', 100000)`));
+    return { acc, card, sub, fi };
+  }
+  const count = (uid: string, table: string) => as(uid, async () => Number((await one<{ n: string }>(`select count(*) n from ${table}`)).n));
+
+  beforeAll(async () => {
+    await db.query(`insert into auth.users (id, email) values ($1, 'carol@nexo.test')`, [CAROL]);
+  });
+
+  it("exportação traz só os dados do próprio usuário e nenhum segredo", async () => {
+    await seed(CAROL, "C");
+    await seed(BOB, "B");
+    const ex = await as(CAROL, async () => (await one<{ d: Record<string, unknown[]> & { profile: Record<string, unknown> } }>(`select export_my_data() as d`)).d);
+    expect(ex.accounts).toHaveLength(1);
+    expect(JSON.stringify(ex)).not.toContain("Conta B");
+    expect(ex.fixed_incomes).toHaveLength(1);
+    expect(ex.subscription_charges).toHaveLength(1);
+    const keys = Object.keys(ex.profile).join(",");
+    expect(keys).not.toMatch(/password|token|secret|key/i);
+    // sem login não exporta
+    await expect(as(null, () => q(`select export_my_data()`))).rejects.toThrow();
+  });
+
+  it("limpar lançamentos: apaga movimentações e preserva contas, cartões, categorias, assinaturas e rendas", async () => {
+    const cats = await count(CAROL, "categories");
+    expect(cats).toBeGreaterThan(0);
+    const r = await as(CAROL, () => one<{ r: Record<string, number> }>(`select clear_my_entries('2026-10-27') as r`));
+    expect(r.r.entries).toBeGreaterThan(0);
+    expect(await count(CAROL, "account_entries")).toBe(0);
+    expect(await count(CAROL, "card_charges")).toBe(0);
+    expect(await count(CAROL, "purchases")).toBe(0);
+    expect(await count(CAROL, "subscription_charges")).toBe(0);
+    // preservados
+    expect(await count(CAROL, "accounts")).toBe(1);
+    expect(await count(CAROL, "cards")).toBe(1);
+    expect(await count(CAROL, "categories")).toBe(cats);
+    expect(await count(CAROL, "subscriptions")).toBe(1);
+    expect(await count(CAROL, "fixed_incomes")).toBe(1);
+    expect(await count(CAROL, "goals")).toBe(1);
+    // saldo volta ao saldo inicial; nada quebrado
+    expect(await balance(CAROL, (await as(CAROL, () => one<{ id: string }>(`select id from accounts`))).id)).toBe(100000);
+    // marcador impede as recorrências de recriar o passado
+    const marks = await as(CAROL, () => one<{ c: string; f: string }>(`select (select charged_through::text from subscriptions) c, (select cleared_before::text from fixed_incomes) f`));
+    expect(marks).toEqual({ c: "2026-10-27", f: "2026-10-27" });
+    // o histórico apagado não fica na auditoria
+    expect(await as(CAROL, async () => Number((await one<{ n: string }>(`select count(*) n from audit_log where table_name in ('account_entries','card_charges','purchases','transfers')`)).n))).toBe(0);
+    // outro usuário não foi tocado
+    expect(await count(BOB, "account_entries")).toBeGreaterThan(0);
+    expect(await count(BOB, "card_charges")).toBeGreaterThan(0);
+  });
+
+  it("limpar lançamentos é repetível sem erro (sem execução dupla com efeito)", async () => {
+    const r = await as(CAROL, () => one<{ r: Record<string, number> }>(`select clear_my_entries('2026-10-27') as r`));
+    expect(r.r.entries).toBe(0);
+  });
+
+  it("limpar tudo: remove dados financeiros, mantém login/perfil, restaura categorias padrão e não toca em outros usuários", async () => {
+    await seed(CAROL, "C2");
+    await as(CAROL, () => q(`update profiles set display_name = 'Carol', theme = 'light', reserve_cents = 5000`));
+    await as(CAROL, () => q(`insert into categories (kind, name) values ('expense', 'Minha categoria própria')`));
+    const bobBefore = [await count(BOB, "accounts"), await count(BOB, "account_entries"), await count(BOB, "cards")];
+    await as(CAROL, () => q(`select clear_all_financial_data()`));
+    for (const t of ["accounts", "cards", "account_entries", "transfers", "purchases", "card_charges", "subscriptions", "subscription_charges", "subscription_prices", "fixed_incomes", "goals", "budgets", "tags", "audit_log"]) {
+      expect(await count(CAROL, t), t).toBe(0);
+    }
+    // categoria própria sumiu; as padrão voltaram
+    expect(await as(CAROL, () => q(`select 1 from categories where name = 'Minha categoria própria'`))).toHaveLength(0);
+    expect(await count(CAROL, "categories")).toBeGreaterThan(10);
+    // perfil e preferências preservados; login (auth.users) intacto
+    const p = await as(CAROL, () => one<{ display_name: string; theme: string }>(`select display_name, theme from profiles`));
+    expect(p).toEqual({ display_name: "Carol", theme: "light" });
+    expect(Number((await one<{ n: string }>(`select count(*) n from auth.users where id = $1`, [CAROL])).n)).toBe(1);
+    // Bob intacto
+    expect([await count(BOB, "accounts"), await count(BOB, "account_entries"), await count(BOB, "cards")]).toEqual(bobBefore);
+    // sem referências quebradas
+    const orphans = await q(`select 1 from account_entries e left join accounts a on a.id = e.account_id where a.id is null`);
+    expect(orphans).toHaveLength(0);
+  });
+
+  it("a etapa final só roda dentro da limpeza e exige login", async () => {
+    await expect(as(CAROL, () => q(`select _wipe_finish(true)`))).rejects.toThrow(/não permitida/);
+    await expect(as(null, () => q(`select clear_all_financial_data()`))).rejects.toThrow();
+    await expect(as(null, () => q(`select clear_my_entries('2026-10-27')`))).rejects.toThrow();
+  });
+});

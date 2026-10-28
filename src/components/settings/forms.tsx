@@ -1,6 +1,5 @@
 "use client";
 import { useActionState, useEffect } from "react";
-import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/field";
 import { Picker } from "@/components/ui/picker";
@@ -96,17 +95,6 @@ export function ProfileForm({
       </label>
       <Button type="submit" loading={pending} className="justify-self-start">Salvar preferências</Button>
     </form>
-  );
-}
-
-export function ExportButton() {
-  return (
-    <Button asChild variant="outline" className="justify-self-start">
-      <a href="/api/export" download>
-        <Download />
-        Exportar meus dados
-      </a>
-    </Button>
   );
 }
 

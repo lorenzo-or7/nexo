@@ -42,4 +42,12 @@ describe("renda fixa", () => {
     const t = fixedIncomeTotals([salary, client, { ...client, id: "c2", status: "paused" }]);
     expect(t).toMatchObject({ monthly: 650000, salary: 500000, clients: 150000, yearly: 7800000, activeCount: 2 });
   });
+
+  it("depois de limpar lançamentos, meses já passados não são recriados (mas os futuros continuam)", () => {
+    const cleared = { ...salary, clearedBefore: "2026-10-05" };
+    expect(fixedDueToRecord(cleared, "2026-10-15", new Set()).map((x) => x.periodKey)).toEqual([]);
+    expect(fixedDueToRecord(cleared, "2026-11-10", new Set()).map((x) => x.periodKey)).toEqual(["2026-11"]);
+    // sem marcador, o comportamento antigo continua
+    expect(fixedDueToRecord(salary, "2026-10-15", new Set()).map((x) => x.periodKey)).toEqual(["2026-09", "2026-10"]);
+  });
 });
