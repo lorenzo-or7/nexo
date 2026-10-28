@@ -10,7 +10,7 @@ Cada chamada simula uma requisição do PostgREST: uma transação, `SET LOCAL R
 # 1) um Postgres 15+ qualquer, como superusuário (ex.: initdb + pg_ctl, ou Docker)
 # 2) o driver (sem alterar o package.json)
 npm i --no-save pg
-# 3) rodar tudo, ou uma parte: migrations | security | functional | recon | guard
+# 3) rodar tudo, ou uma parte: migrations | security | functional | recon
 PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres node supabase/audit/run-audit.mjs
 ```
 
@@ -21,8 +21,7 @@ Saída: tabela PASS / FAIL / WARN / INFO e `last-report.json`. Código de saída
 | `bootstrap.sql` | cria papéis, `auth`, `storage` e privilégios padrão como no Supabase |
 | `run-audit.mjs` | as verificações (migrations, segurança, dois usuários, concorrência) |
 | `verificar-migrations.sql` | **somente leitura**: diz quais migrations já estão aplicadas (pode rodar em produção) |
-| `opcional/endurecimento.sql` | revoga privilégios sobrando (TRUNCATE/REFERENCES/TRIGGER) — defesa em profundidade |
-| `opcional/pay_invoice_guard.sql` | o banco passa a recusar pagamento de fatura acima do que falta (corrige o achado F6) |
+| `opcional/endurecimento.sql` | **opcional, não é migration e nunca é aplicado automaticamente**: revoga privilégios sobrando (TRUNCATE/REFERENCES/TRIGGER) e execução de gatilhos por anon. Testado em S11 |
 
 O que **não** dá para provar aqui: o painel/Auth reais do seu projeto (política de senha, SMTP, rate limit),
 o PostgREST de verdade e o estado atual do seu banco de produção — para o último, use `verificar-migrations.sql`.

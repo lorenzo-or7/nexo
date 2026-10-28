@@ -1,40 +1,40 @@
 {
-  "generatedAt": "2026-10-28T03:03:31.184Z",
+  "generatedAt": "2026-10-28T03:21:20.598Z",
   "results": [
     {
       "id": "M1",
       "area": "Migrations",
       "title": "Nomes no padrão do Supabase, versões únicas, em ordem estritamente crescente",
       "status": "PASS",
-      "evidence": "17 migrations, de 20261008000100 a 20261027001700: 20261008000100, 20261008000200, 20261008000300, 20261008000400, 20261009000500, 20261009000600, 20261009000700, 20261009000800, 20261009000900, 20261009001000, 20261010001100, 20261016001200, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700"
+      "evidence": "18 migrations, de 20261008000100 a 20261028000100: 20261008000100, 20261008000200, 20261008000300, 20261008000400, 20261009000500, 20261009000600, 20261009000700, 20261009000800, 20261009000900, 20261009001000, 20261010001100, 20261016001200, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100"
     },
     {
       "id": "M2",
       "area": "Migrations",
       "title": "Todas aplicam em sequência num banco vazio com papéis/privilégios estilo Supabase",
       "status": "PASS",
-      "evidence": "17/17 aplicadas sem erro no PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1); 22 tabelas, 40 funções em public"
+      "evidence": "18/18 aplicadas sem erro no PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1); 22 tabelas, 40 funções em public"
     },
     {
       "id": "M3",
       "area": "Migrations",
       "title": "Reaplicar cada migration sobre o banco já migrado (quais são seguras para rodar de novo)",
       "status": "INFO",
-      "evidence": "Reaplicáveis sem erro: 20261009000600, 20261009000800, 20261010001100, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700. NÃO reexecutar (falham se já aplicadas): 20261008000100 (type \"cents\" already exists); 20261008000200 (policy \"accounts_owner\" for table \"accounts\" already exists); 20261008000300 (trigger \"on_auth_user_created\" for relation \"users\" already exists); 20261008000400 (trigger \"entries_transfer_balanced\" for relation \"account_entries\" alr); 20261009000500 (column \"institution_key\" of relation \"cards\" already exists); 20261009000700 (column \"institution_key\" of relation \"accounts\" already exists); 20261009000900 (column \"counterparty\" of relation \"account_entries\" already exists); 20261009001000 (trigger \"categories_rules\" for relation \"categories\" already exists); 20261016001200 (relation \"fixed_incomes\" already exists)"
+      "evidence": "Reaplicáveis sem erro: 20261009000600, 20261009000800, 20261010001100, 20261016001300, 20261017001400, 20261027001500, 20261027001600, 20261027001700, 20261028000100. NÃO reexecutar (falham se já aplicadas): 20261008000100 (type \"cents\" already exists); 20261008000200 (policy \"accounts_owner\" for table \"accounts\" already exists); 20261008000300 (trigger \"on_auth_user_created\" for relation \"users\" already exists); 20261008000400 (trigger \"entries_transfer_balanced\" for relation \"account_entries\" alr); 20261009000500 (column \"institution_key\" of relation \"cards\" already exists); 20261009000700 (column \"institution_key\" of relation \"accounts\" already exists); 20261009000900 (column \"counterparty\" of relation \"account_entries\" already exists); 20261009001000 (trigger \"categories_rules\" for relation \"categories\" already exists); 20261016001200 (relation \"fixed_incomes\" already exists)"
     },
     {
       "id": "M4",
       "area": "Migrations",
-      "title": "Atualização com dados reais-fictícios: estado anterior (até 20261017001400) + 3 novas migrations preservam os dados",
+      "title": "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 4 novas migrations preservam os dados",
       "status": "PASS",
-      "evidence": "3 migrations novas aplicadas sobre dados existentes; contagens de 21 tabelas idênticas para os 2 usuários; remove_fixed_income = deleted_with_history"
+      "evidence": "4 migrations novas aplicadas sobre dados existentes; contagens de 21 tabelas idênticas para os 2 usuários; remove_fixed_income = deleted_with_history"
     },
     {
       "id": "M5",
       "area": "Migrations",
       "title": "Script de detecção (somente leitura) identifica corretamente quais migrations já foram aplicadas",
       "status": "PASS",
-      "evidence": "banco completo: 17/17 detectadas; banco parcial: faltam exatamente 20261027001500, 20261027001600, 20261027001700"
+      "evidence": "banco completo: 18/18 detectadas; banco parcial: faltam exatamente 20261027001500, 20261027001600, 20261027001700, 20261028000100"
     },
     {
       "id": "S1",
@@ -83,7 +83,7 @@
       "area": "Segurança",
       "title": "_wipe_finish (definer) recusa chamada direta de usuário logado e de anon",
       "status": "PASS",
-      "evidence": "sem marcador: \"Operação não permitida\"; anon: \"permission denied for function _wipe_fin\"; com marcador forjado por Alice, o Bob permanece idêntico (impressão 80d8724b)"
+      "evidence": "sem marcador: \"Operação não permitida\"; anon: \"permission denied for function _wipe_fin\"; com marcador forjado por Alice, o Bob permanece idêntico (impressão 14d5c570)"
     },
     {
       "id": "S8",
@@ -125,7 +125,7 @@
       "area": "Isolamento",
       "title": "Escrita cruzada: Bob não consegue usar, alterar nem apagar nada da Alice (ids reais da Alice)",
       "status": "PASS",
-      "evidence": "21 tentativas do Bob com ids da Alice: todas recusadas; impressão da Alice inalterada (a750a5e9)"
+      "evidence": "21 tentativas do Bob com ids da Alice: todas recusadas; impressão da Alice inalterada (9c70e851)"
     },
     {
       "id": "F3",
@@ -149,11 +149,46 @@
       "evidence": "8 chamadas paralelas → 1 linha, mesmo id para todas"
     },
     {
-      "id": "F6",
+      "id": "P0",
       "area": "Pagamento de fatura",
-      "title": "Pagamento acima do que falta na fatura é recusado pelo BANCO (não só pela tela)",
-      "status": "FAIL",
-      "evidence": "fatura de 10000 recebeu 20000 (5 de 5 aceitos); pagamento de 999.999,99: aceito"
+      "title": "Preparação: cartão/compra 3x de 10.000 para a Alice e para o Bob (faturas 2026-10..12)",
+      "status": "PASS",
+      "evidence": "ok"
+    },
+    {
+      "id": "P1",
+      "area": "Pagamento de fatura",
+      "title": "Propriedade: cartão e conta de outro usuário (ou conta arquivada) são recusados; anon também",
+      "status": "PASS",
+      "evidence": "Cartão não encontrado | Conta não encontrada | permission denied for functi | Conta não encontrada"
+    },
+    {
+      "id": "P2",
+      "area": "Pagamento de fatura",
+      "title": "Status permitidos: só confirmed e scheduled; valor, fatura e data inválidos são recusados",
+      "status": "PASS",
+      "evidence": "expected/foo/vazio/null/CONFIRMED recusados; 0, negativo, fatura mal formada e data nula recusados; scheduled aceito (e estornado)"
+    },
+    {
+      "id": "P3",
+      "area": "Pagamento de fatura",
+      "title": "Idempotência consistente: mesma chave = mesmo pedido; pedido diferente, outra operação, pagamento estornado e corrida são tratados",
+      "status": "PASS",
+      "evidence": "replay = mesmo id; valor/fatura/conta diferentes e chave de outra operação recusados; chave estornada não ressuscita; 4 corridas com a mesma chave → 1 vencedor/1 linha; 8 repetições → 1 id; chave por usuário"
+    },
+    {
+      "id": "P4",
+      "area": "Pagamento de fatura",
+      "title": "Concorrência: pagamentos simultâneos NUNCA ultrapassam o devido (20×1.000 numa fatura de 10.000; depois 6×4.000)",
+      "status": "PASS",
+      "evidence": "20×1.000 → 10 aceitos, pago 10.000; 6×4.000 → 2 aceitos, pago 8.000; estorno+4 pagamentos simultâneos → pago 4000 ≤ 10.000; Bob paga a sua fatura sem interferir"
+    },
+    {
+      "id": "P5",
+      "area": "Pagamento de fatura",
+      "title": "Matriz: parcial, integral, excedente, fatura quitada, estorno e novo pagamento",
+      "status": "PASS",
+      "evidence": "2.500 + 7.500 = quitada; +1 recusado; estorno de 7.500 → falta 7.500; 7.501 e 99.999.999.999 recusados; 7.500 quita de novo; nenhum pagamento vira despesa de consumo"
     },
     {
       "id": "F7",
@@ -174,7 +209,7 @@
       "area": "Limpeza",
       "title": "Limpar lançamentos (Alice): zera movimentações, preserva cadastros, não toca no Bob",
       "status": "PASS",
-      "evidence": "removido: {\"entries\":14,\"purchases\":1,\"transfers\":1,\"card_charges\":3,\"subscription_charges\":0}; cadastros preservados; Bob idêntico (69c03379); marcador de recomeço gravado; auditoria dos lançamentos limpa"
+      "evidence": "removido: {\"entries\":28,\"purchases\":2,\"transfers\":1,\"card_charges\":6,\"subscription_charges\":0}; cadastros preservados; Bob idêntico (735a429b); marcador de recomeço gravado; auditoria dos lançamentos limpa"
     },
     {
       "id": "F10",
@@ -202,7 +237,7 @@
       "area": "Limpeza",
       "title": "Reautenticação/identidade: limpeza usa só o JWT; o Bob limpando não afeta a Alice e anon/sem sessão não limpa nada",
       "status": "PASS",
-      "evidence": "assinaturas sem parâmetro de usuário (export_my_data(); clear_my_entries(date); clear_all_financial_data()); anon e JWT sem sub recusados; Bob limpou a própria conta e a Alice permaneceu idêntica (fb0f02ab)"
+      "evidence": "assinaturas sem parâmetro de usuário (export_my_data(); clear_my_entries(date); clear_all_financial_data()); anon e JWT sem sub recusados; Bob limpou a própria conta e a Alice permaneceu idêntica (b5481f92)"
     },
     {
       "id": "R1",
@@ -210,13 +245,6 @@
       "title": "Compra parcelada estornada: Lançamentos (parcelas ativas) + estornos = consumo do gráfico, no banco real",
       "status": "PASS",
       "evidence": "valor cheio da compra 30.000 (o que Lançamentos mostrava) → parcelas ativas 20.000 − estorno 10.000 = 10.000, idêntico ao total do cartão no gráfico, também por categoria"
-    },
-    {
-      "id": "O1",
-      "area": "Pagamento de fatura",
-      "title": "Com opcional/pay_invoice_guard.sql: excesso e corrida são recusados, e os fluxos legítimos continuam funcionando",
-      "status": "PASS",
-      "evidence": "5 pagamentos simultâneos de 4.000 numa fatura de 10.000 → 2 aceitos (8.000); 2.001 recusado; 2.000 quita; +1 recusado; após estorno aceita de novo; chave repetida em paralelo = 1 linha; Bob recusado"
     }
   ]
 }

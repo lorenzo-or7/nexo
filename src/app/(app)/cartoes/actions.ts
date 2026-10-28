@@ -194,7 +194,15 @@ export async function payInvoice(_: CardActionResult, form: FormData): Promise<C
     p_status: status,
     p_idempotency_key: `invpay:${parsed.data.key}`,
   });
-  if (error) return { ok: false, error: "Não foi possível registrar o pagamento" };
+  if (error) {
+    // mensagens do banco que o usuário pode agir sobre (a regra vale no banco, mesmo com duas abas abertas)
+    if (/passa do que falta|já está quitada/.test(error.message)) {
+      revalidatePath("/", "layout");
+      return { ok: false, error: /quitada/.test(error.message) ? "Esta fatura já está quitada." : "Outro pagamento já foi registrado: o valor passa do que falta. Atualize a tela.", field: "amount" };
+    }
+    if (/já foi estornado|Chave de idempot/.test(error.message)) return { ok: false, error: "Este envio já foi usado. Feche e abra o pagamento de novo." };
+    return { ok: false, error: "Não foi possível registrar o pagamento" };
+  }
   revalidatePath("/", "layout");
   const left = inv.remaining - amount;
   return { ok: true, message: left === 0 ? "Fatura quitada." : `Pagamento registrado. Ainda faltam ${formatBRL(left as Cents)}.` };

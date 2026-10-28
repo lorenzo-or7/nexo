@@ -48,7 +48,9 @@ Estas regras estão implementadas em `src/domain/` (funções puras, sem banco) 
 - **Não é despesa de consumo** — a despesa já foi contada na compra. Relatórios de consumo excluem esse tipo.
 - Integral, parcial ou antecipado (fatura ainda aberta).
 - Restante de fatura **vencida** continua pendente na própria fatura (status *Vencida*); só vira *Paga* com restante zero, em qualquer data. Juros entram como lançamento `fee` informado.
-- Pagamento a maior vira **crédito** na próxima fatura.
+- Pagamento **a maior é recusado**, na tela e no banco (`pay_invoice`, migration 20261028000100): a soma dos pagamentos ativos (confirmados ou agendados, não estornados) nunca passa do devido da fatura, mesmo com pagamentos simultâneos (trava por cartão + fatura). Antecipar é pagar a fatura ainda aberta, não pagar além dela.
+- Cartão e conta de pagamento precisam ser do próprio usuário (conta não arquivada); situação só *confirmed* ou *scheduled*.
+- Idempotência: a mesma chave com o mesmo pedido devolve o mesmo pagamento; a mesma chave com outro pedido, de outra operação ou de um pagamento estornado é recusada.
 
 **Estorno** [10]
 - `credit_current` (padrão): crédito do valor estornado na fatura atual; parcelas futuras continuam. Líquido da compra = 0.

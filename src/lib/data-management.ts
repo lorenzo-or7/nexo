@@ -2,3 +2,6 @@
 export const CLEAR_ENTRIES_PHRASE = "LIMPAR LANÇAMENTOS";
 export const CLEAR_ALL_PHRASE = "EXCLUIR MEUS DADOS";
 export const CLEAR_ALL_DONE = "Seus dados financeiros foram removidos. Agora você pode começar novamente.";
+
+/** Exclusão definitiva da conta (login + todos os dados): frase própria, diferente da limpeza de dados. */
+export const DELETE_ACCOUNT_PHRASE = "EXCLUIR MINHA CONTA";

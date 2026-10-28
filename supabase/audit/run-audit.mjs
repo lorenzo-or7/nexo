@@ -222,7 +222,7 @@ async function sectionMigrations() {
     return { status: "INFO", evidence: `Reaplicáveis sem erro: ${safe.join(", ") || "nenhuma"}. NÃO reexecutar (falham se já aplicadas): ${unsafe.join("; ") || "nenhuma"}` };
   });
 
-  await check("M4", "Migrations", "Atualização com dados reais-fictícios: estado anterior (até 20261017001400) + 3 novas migrations preservam os dados", async () => {
+  await check("M4", "Migrations", "Atualização com dados fictícios: estado anterior (até 20261017001400) + as 4 novas migrations preservam os dados", async () => {
     const baseline = "20261017001400_fixed_bills.sql";
     const pre = await freshDb("nexo_audit_upg", baseline);
     assert(pre.length === files.indexOf(baseline) + 1, "baseline errado");
@@ -257,7 +257,7 @@ async function sectionMigrations() {
     const rev = await api.one(ALICE, `select remove_fixed_income($1,'2026-10-20') as r`, [sA.fiClient]);
     assert(rev.r === "deleted_with_history", `remove_fixed_income devolveu ${rev.r}`);
     await api.end();
-    return `3 migrations novas aplicadas sobre dados existentes; contagens de ${tables.length} tabelas idênticas para os 2 usuários; remove_fixed_income = ${rev.r}`;
+    return `${files.length - files.indexOf(baseline) - 1} migrations novas aplicadas sobre dados existentes; contagens de ${tables.length} tabelas idênticas para os 2 usuários; remove_fixed_income = ${rev.r}`;
   });
 
   await check("M5", "Migrations", "Script de detecção (somente leitura) identifica corretamente quais migrations já foram aplicadas", async () => {
@@ -528,14 +528,111 @@ async function sectionFunctional() {
     return "8 chamadas paralelas → 1 linha, mesmo id para todas";
   });
 
-  await check("F6", "Pagamento de fatura", "Pagamento acima do que falta na fatura é recusado pelo BANCO (não só pela tela)", async () => {
-    // fatura 2026-12 tem 10.000; 5 pagamentos simultâneos de 4.000 com chaves diferentes
-    const results2 = await Promise.allSettled(Array.from({ length: 5 }, (_, i) => api.one(ALICE, `select pay_invoice($1,'2026-12',$2,4000,'2026-12-10','confirmed',$3) as id`, [A.card, A.acc, `k-race-${i}`])));
-    const ok = results2.filter((r) => r.status === "fulfilled").length;
-    const paid = Number((await c.query(`select coalesce(sum(-amount_cents),0) s from account_entries where kind='invoice_payment' and invoice_ref='2026-12' and card_id=$1 and deleted_at is null`, [A.card])).rows[0].s);
-    const over = await api.q(ALICE, `select pay_invoice($1,'2026-12',$2,99999999,'2026-12-10','confirmed','k-over') as id`, [A.card, A.acc]).then(() => "aceito", (e) => `recusado (${e.message.slice(0, 40)})`);
-    assert(paid <= 10000 && over.startsWith("recusado"), `fatura de 10000 recebeu ${paid} (${ok} de 5 aceitos); pagamento de 999.999,99: ${over}`);
-    return `pago ${paid} ≤ 10000; excesso ${over}`;
+  // ---------- pagamento de fatura: guarda no banco (migration 20261028000100), num cartão só para estes testes
+  const G = {};
+  await check("P0", "Pagamento de fatura", "Preparação: cartão/compra 3x de 10.000 para a Alice e para o Bob (faturas 2026-10..12)", async () => {
+    const mk = async (uid, label) => {
+      const card = (await api.one(uid, `insert into cards (name, closing_day, due_day, payment_account_id) values ($1, 13, 20, $2) returning id`, [`Cartão P ${label}`, uid === ALICE ? A.acc : B.acc])).id;
+      await api.q(uid, `select create_credit_purchase($1,'Compra P',null,'2026-10-05',30000,$2::jsonb)`, [card, JSON.stringify([10, 11, 12].map((m, i) => ({ number: i + 1, invoice_ref: `2026-${m}`, amount_cents: 10000 })))]);
+      return card;
+    };
+    G.a = await mk(ALICE, "A");
+    G.b = await mk(BOB, "B");
+    return "ok";
+  });
+  const payP = (uid, card, acc, amount, key, ref = "2026-10", status = "confirmed") =>
+    api.one(uid, `select pay_invoice($1,$2,$3,$4,'2026-10-20',$5,$6) as id`, [card, ref, acc, amount, status, key]);
+  const paidP = async (ref, card = G.a) => Number((await c.query(`select coalesce(sum(-amount_cents),0) s from account_entries where kind='invoice_payment' and invoice_ref=$1 and card_id=$2 and deleted_at is null`, [ref, card])).rows[0].s);
+
+  await check("P1", "Pagamento de fatura", "Propriedade: cartão e conta de outro usuário (ou conta arquivada) são recusados; anon também", async () => {
+    const m = [];
+    m.push(await api.fails(BOB, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20')`, [G.a, B.acc], /Cartão não encontrado/));
+    m.push(await api.fails(BOB, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20')`, [G.b, A.acc], /Conta não encontrada/));
+    m.push(await api.fails(null, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20')`, [G.a, A.acc], /permission denied/i));
+    const arch = (await api.one(ALICE, `insert into accounts (name, opening_balance_cents, opening_date) values ('Arquivada', 1000, '2026-10-01') returning id`)).id;
+    await api.q(ALICE, `update accounts set archived_at = now() where id = $1`, [arch]);
+    m.push(await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20')`, [G.a, arch], /Conta não encontrada/));
+    assert((await paidP("2026-10")) === 0, "algum pagamento entrou");
+    return m.map((x) => x.slice(0, 28)).join(" | ");
+  });
+
+  await check("P2", "Pagamento de fatura", "Status permitidos: só confirmed e scheduled; valor, fatura e data inválidos são recusados", async () => {
+    for (const st of ["expected", "foo", "", "CONFIRMED"]) await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20',$3)`, [G.a, A.acc, st], /Situação/);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20',null)`, [G.a, A.acc], /Situação/);
+    for (const amt of [0, -1]) await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,$3,'2026-10-20')`, [G.a, A.acc, amt], /positivo/);
+    for (const ref of ["2026-13", "2026-00", "26-10", "2026-10-01", "x", ""]) await api.fails(ALICE, `select pay_invoice($1,$3,$2,100,'2026-10-20')`, [G.a, A.acc, ref], /Fatura inválida/);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,100,null)`, [G.a, A.acc], /Data/);
+    const ok = await payP(ALICE, G.a, A.acc, 1000, "p2-sched", "2026-10", "scheduled");
+    assert(ok.id, "scheduled recusado");
+    await api.q(ALICE, `select reverse_invoice_payment($1)`, [ok.id]);
+    assert((await paidP("2026-10")) === 0, "estado");
+    return "expected/foo/vazio/null/CONFIRMED recusados; 0, negativo, fatura mal formada e data nula recusados; scheduled aceito (e estornado)";
+  });
+
+  await check("P3", "Pagamento de fatura", "Idempotência consistente: mesma chave = mesmo pedido; pedido diferente, outra operação, pagamento estornado e corrida são tratados", async () => {
+    const p = await payP(ALICE, G.a, A.acc, 3000, "p3-a");
+    assert((await payP(ALICE, G.a, A.acc, 3000, "p3-a")).id === p.id, "replay devolveu outro id");
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,3001,'2026-10-20','confirmed','p3-a')`, [G.a, A.acc], /outra operação/);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-11',$2,3000,'2026-10-20','confirmed','p3-a')`, [G.a, A.acc], /outra operação/);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,3000,'2026-10-20','confirmed','p3-a')`, [G.a, A.acc2], /outra operação/);
+    // chave de um lançamento que não é pagamento
+    await api.q(ALICE, `insert into account_entries (account_id, kind, status, amount_cents, occurred_on, idempotency_key) values ($1,'expense','confirmed',-100,'2026-10-02','p3-outro')`, [A.acc]);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,100,'2026-10-20','confirmed','p3-outro')`, [G.a, A.acc], /outra operação/);
+    // estornado: a chave não ressuscita
+    await api.q(ALICE, `select reverse_invoice_payment($1)`, [p.id]);
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,3000,'2026-10-20','confirmed','p3-a')`, [G.a, A.acc], /estornado/);
+    // corrida: mesma chave, valores diferentes, ao mesmo tempo → exatamente 1 vence
+    const race = await Promise.allSettled([1000, 2000, 3000, 4000].map((v) => payP(ALICE, G.a, A.acc, v, "p3-race")));
+    const won = race.filter((r) => r.status === "fulfilled");
+    const rows = (await c.query(`select count(*)::int n from account_entries where idempotency_key='p3-race'`)).rows[0].n;
+    assert(won.length === 1 && rows === 1, `${won.length} vencedores, ${rows} linhas`);
+    // corrida: mesma chave e mesmo pedido, em faturas diferentes não se misturam; mesma chave+mesmo pedido → todos recebem o mesmo id
+    const same = await Promise.all(Array.from({ length: 8 }, () => payP(ALICE, G.a, A.acc, 500, "p3-same", "2026-11")));
+    assert(new Set(same.map((x) => x.id)).size === 1, "ids diferentes");
+    // a chave é por usuário
+    await payP(BOB, G.b, B.acc, 3000, "p3-a");
+    await api.q(ALICE, `select reverse_invoice_payment($1)`, [same[0].id]);
+    await api.q(ALICE, `select reverse_invoice_payment(id) from account_entries where idempotency_key='p3-race' and deleted_at is null`);
+    assert((await paidP("2026-10")) === 0 && (await paidP("2026-11")) === 0, "limpeza do cenário");
+    return "replay = mesmo id; valor/fatura/conta diferentes e chave de outra operação recusados; chave estornada não ressuscita; 4 corridas com a mesma chave → 1 vencedor/1 linha; 8 repetições → 1 id; chave por usuário";
+  });
+
+  await check("P4", "Pagamento de fatura", "Concorrência: pagamentos simultâneos NUNCA ultrapassam o devido (20×1.000 numa fatura de 10.000; depois 6×4.000)", async () => {
+    const r1 = await Promise.allSettled(Array.from({ length: 20 }, (_, i) => payP(ALICE, G.a, A.acc, 1000, `p4-a-${i}`, "2026-11")));
+    const ok1 = r1.filter((r) => r.status === "fulfilled").length;
+    assert(ok1 === 10 && (await paidP("2026-11")) === 10000, `20 pagamentos de 1.000: aceitos ${ok1}, pago ${await paidP("2026-11")}`);
+    const bad = r1.filter((r) => r.status === "rejected").map((r) => r.reason.message);
+    assert(bad.every((m) => /quitada|passa do que falta/.test(m)), `motivos inesperados: ${[...new Set(bad)]}`);
+    const r2 = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => payP(ALICE, G.a, A.acc, 4000, `p4-b-${i}`, "2026-12")));
+    const ok2 = r2.filter((r) => r.status === "fulfilled").length;
+    assert(ok2 === 2 && (await paidP("2026-12")) === 8000, `6×4.000: aceitos ${ok2}, pago ${await paidP("2026-12")}`);
+    // estorno concorrente com pagamento: nunca passa do devido
+    const rev = await api.one(ALICE, `select id from account_entries where invoice_ref='2026-12' and card_id=$1 and deleted_at is null limit 1`, [G.a]);
+    await Promise.allSettled([api.q(ALICE, `select reverse_invoice_payment($1)`, [rev.id]), ...Array.from({ length: 4 }, (_, i) => payP(ALICE, G.a, A.acc, 3000, `p4-c-${i}`, "2026-12"))]);
+    const total = await paidP("2026-12");
+    assert(total <= 10000, `pago ${total} > 10000 após estorno+pagamentos simultâneos`);
+    // o Bob pagando a MESMA referência no cartão dele não interfere (travas por cartão)
+    await payP(BOB, G.b, B.acc, 10000, "p4-bob", "2026-11");
+    assert((await paidP("2026-11", G.b)) === 10000 && (await paidP("2026-11")) === 10000, "interferência entre usuários");
+    return `20×1.000 → ${ok1} aceitos, pago 10.000; 6×4.000 → ${ok2} aceitos, pago 8.000; estorno+4 pagamentos simultâneos → pago ${total} ≤ 10.000; Bob paga a sua fatura sem interferir`;
+  });
+
+  await check("P5", "Pagamento de fatura", "Matriz: parcial, integral, excedente, fatura quitada, estorno e novo pagamento", async () => {
+    // fatura 2026-10 está zerada neste ponto (P3 limpou)
+    const p1 = await payP(ALICE, G.a, A.acc, 2500, "p5-1");
+    const p2 = await payP(ALICE, G.a, A.acc, 7500, "p5-2"); // integral do que faltava
+    assert((await paidP("2026-10")) === 10000, "integral");
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,1,'2026-10-20')`, [G.a, A.acc], /já está quitada/);
+    await api.q(ALICE, `select reverse_invoice_payment($1)`, [p2.id]);
+    assert((await paidP("2026-10")) === 2500, "estorno");
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,7501,'2026-10-20')`, [G.a, A.acc], /passa do que falta/); // excedente
+    await api.fails(ALICE, `select pay_invoice($1,'2026-10',$2,99999999999,'2026-10-20')`, [G.a, A.acc], /passa do que falta/);
+    await payP(ALICE, G.a, A.acc, 7500, "p5-3"); // volta a poder quitar
+    assert((await paidP("2026-10")) === 10000 && p1.id, "quitação final");
+    // não é despesa de consumo
+    const exp = Number((await api.one(ALICE, `select count(*)::int n from account_entries where kind='expense' and description like 'Pagamento fatura%'`)).n);
+    assert(exp === 0, "pagamento virou despesa");
+    return "2.500 + 7.500 = quitada; +1 recusado; estorno de 7.500 → falta 7.500; 7.501 e 99.999.999.999 recusados; 7.500 quita de novo; nenhum pagamento vira despesa de consumo";
   });
 
   await check("F7", "Renda fixa", "Excluir renda fixa: some e nunca volta; histórico confirmado preservado; Bob intacto", async () => {
@@ -702,40 +799,6 @@ async function sectionRecon() {
   });
 }
 
-// ------------------------------------------------------------------ D. correção opcional do achado F6
-async function sectionGuard() {
-  await check("O1", "Pagamento de fatura", "Com opcional/pay_invoice_guard.sql: excesso e corrida são recusados, e os fluxos legítimos continuam funcionando", async () => {
-    await freshDb("nexo_audit_guard");
-    const c = await admin("nexo_audit_guard");
-    await c.query(readFileSync(path.join(here, "opcional/pay_invoice_guard.sql"), "utf8"));
-    const api = new Api("nexo_audit_guard");
-    const A = await seed(api, ALICE, "G");
-    const B = await seed(api, BOB, "G");
-    const pay = (uid, card, acc, ref, amount, key) => api.one(uid, `select pay_invoice($1,$2,$3,$4,'2026-12-10','confirmed',$5) as id`, [card, ref, acc, amount, key]);
-    const paidOf = async (ref) => Number((await c.query(`select coalesce(sum(-amount_cents),0) s from account_entries where kind='invoice_payment' and invoice_ref=$1 and card_id=$2 and deleted_at is null`, [ref, A.card])).rows[0].s);
-    // fatura 2026-12 = 10.000; 5 pagamentos simultâneos de 4.000 → no máximo 2 entram
-    const race = await Promise.allSettled(Array.from({ length: 5 }, (_, i) => pay(ALICE, A.card, A.acc, "2026-12", 4000, `g-${i}`)));
-    const ok = race.filter((r) => r.status === "fulfilled").length;
-    assert(ok === 2 && (await paidOf("2026-12")) === 8000, `aceitos ${ok}, pago ${await paidOf("2026-12")}`);
-    await api.fails(ALICE, `select pay_invoice($1,'2026-12',$2,2001,'2026-12-10')`, [A.card, A.acc], /passa do que falta/);
-    const last = await pay(ALICE, A.card, A.acc, "2026-12", 2000, "g-last"); // exatamente o que falta
-    assert((await paidOf("2026-12")) === 10000, "quitação exata");
-    await api.fails(ALICE, `select pay_invoice($1,'2026-12',$2,1,'2026-12-10')`, [A.card, A.acc], /passa do que falta/);
-    // estornar libera o valor de novo
-    await api.q(ALICE, `select reverse_invoice_payment($1)`, [last.id]);
-    await pay(ALICE, A.card, A.acc, "2026-12", 2000, "g-last-2");
-    assert((await paidOf("2026-12")) === 10000, "repagamento após estorno");
-    // idempotência concorrente continua devolvendo 1 linha
-    const same = await Promise.all(Array.from({ length: 8 }, () => pay(ALICE, A.card, A.acc, "2026-11", 1500, "g-same")));
-    assert(new Set(same.map((x) => x.id)).size === 1, "ids diferentes");
-    // Bob continua sem acesso ao cartão da Alice
-    await api.fails(BOB, `select pay_invoice($1,'2026-12',$2,100,'2026-12-10')`, [A.card, B.acc], /não encontrado/i);
-    await api.end();
-    await c.end();
-    return "5 pagamentos simultâneos de 4.000 numa fatura de 10.000 → 2 aceitos (8.000); 2.001 recusado; 2.000 quita; +1 recusado; após estorno aceita de novo; chave repetida em paralelo = 1 linha; Bob recusado";
-  });
-}
-
 // ------------------------------------------------------------------ execução
 const only = process.argv[2];
 try {
@@ -744,7 +807,6 @@ try {
   if (!only || only === "security") await sectionSecurity();
   if (!only || only === "functional") await sectionFunctional();
   if (!only || only === "recon") await sectionRecon();
-  if (!only || only === "guard") await sectionGuard();
 } finally {
   const rank = { FAIL: 0, WARN: 1, INFO: 2, PASS: 3 };
   for (const r of results) console.log(`${r.status.padEnd(4)}  ${r.id.padEnd(4)} ${r.area} — ${r.title}\n        ${String(r.evidence).replace(/\n/g, " ").slice(0, 600)}`);

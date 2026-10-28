@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { isPreviewEnabled } from "@/lib/env";
 import { DataManagement } from "@/components/settings/data-management";
+import { DeleteAccountForm } from "@/components/settings/forms";
 import { AppShell, PageHeader } from "@/components/shell/app-shell";
 import { Panel, PanelHeader } from "@/components/ui/card";
 import { quickEntry } from "../mock";
@@ -15,6 +16,10 @@ export default function Preview() {
         <Panel>
           <PanelHeader title="Gerenciamento de dados" description="Exporte, recomece o histórico ou limpe tudo. Só os seus dados são afetados." />
           <DataManagement />
+        </Panel>
+        <Panel className="border-[color-mix(in_oklab,var(--negative)_30%,var(--border))]">
+          <PanelHeader title="Excluir conta" />
+          <DeleteAccountForm />
         </Panel>
       </div>
     </AppShell>

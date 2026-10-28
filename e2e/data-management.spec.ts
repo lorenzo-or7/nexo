@@ -53,3 +53,24 @@ test("gerenciamento de dados cabe em 320px", async ({ page }) => {
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(over).toBeLessThanOrEqual(0);
 });
+
+test("excluir conta: só habilita com a frase própria, a senha e o aceite explícito", async ({ page }) => {
+  await page.goto("/dev/preview/configuracoes");
+  const form = page.getByTestId("delete-account-form");
+  const submit = form.getByRole("button", { name: "Excluir conta e dados" });
+  await form.scrollIntoViewIfNeeded();
+  await expect(submit).toBeDisabled();
+  await form.getByLabel(/Digite EXCLUIR MINHA CONTA/).fill("EXCLUIR");
+  await form.getByLabel("Sua senha atual").fill("segredo");
+  await form.getByRole("checkbox").check();
+  await expect(submit).toBeDisabled(); // frase incompleta (a antiga "EXCLUIR" não basta)
+  await form.getByLabel(/Digite EXCLUIR MINHA CONTA/).fill("EXCLUIR MINHA CONTA");
+  await expect(submit).toBeEnabled();
+  await form.getByRole("checkbox").uncheck();
+  await expect(submit).toBeDisabled();
+  await form.getByRole("checkbox").check();
+  await form.getByLabel("Sua senha atual").fill("");
+  await expect(submit).toBeDisabled();
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(0);
+});

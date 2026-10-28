@@ -22,6 +22,7 @@ from (values
   ('20261017001400', 'fixed_bills',            exists (select 1 from col where t = 'subscriptions' and c = 'kind'), 'subscriptions.kind'),
   ('20261027001500', 'fixed_income_lifecycle', exists (select 1 from col where t = 'fixed_incomes' and c = 'deleted_at') and exists (select 1 from fn where n = 'end_fixed_income'), 'fixed_incomes.deleted_at, end_fixed_income'),
   ('20261027001600', 'invoice_payment_reversal', exists (select 1 from fn where n = 'reverse_invoice_payment'), 'reverse_invoice_payment()'),
-  ('20261027001700', 'data_management',       exists (select 1 from col where t = 'fixed_incomes' and c = 'cleared_before') and exists (select 1 from fn where n = 'clear_all_financial_data'), 'fixed_incomes.cleared_before, clear_*')
+  ('20261027001700', 'data_management',       exists (select 1 from col where t = 'fixed_incomes' and c = 'cleared_before') and exists (select 1 from fn where n = 'clear_all_financial_data'), 'fixed_incomes.cleared_before, clear_*'),
+  ('20261028000100', 'pay_invoice_guard',      exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'pay_invoice' and prosrc like '%nexo.invpay%'), 'pay_invoice com trava e limite do devido')
 ) as m(migration, arquivo, aplicada, evidencia)
 order by m.migration;

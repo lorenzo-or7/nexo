@@ -200,6 +200,8 @@ describe("compras no crédito, faturas e estornos (banco)", () => {
 
   it("pagamentos parciais somam, repetir a mesma chave não duplica e o estorno é auditável e único", async () => {
     const { acc, card } = await setupCard(ALICE);
+    // a fatura precisa ter o que pagar: desde a migration 20261028000100 o banco recusa pagamento acima do devido
+    await as(ALICE, () => q(`select create_credit_purchase($1, 'Fatura de teste', null, '2026-10-05', 100000, $2::jsonb)`, [card, JSON.stringify([{ number: 1, invoice_ref: "2026-10", amount_cents: 100000 }])]));
     const p1 = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
     const again = await as(ALICE, () => one<{ id: string }>(`select pay_invoice($1, '2026-10', $2, 40000, '2026-10-10', 'confirmed', 'k-1') as id`, [card, acc]));
     expect(again.id).toBe(p1.id);
@@ -683,6 +685,76 @@ describe("renda fixa", () => {
       `select save_fixed_income(null, 'salary', 'Salário', null, 500000, 5::smallint, '2026-11-05', null, $1, null, null) as id`, [acc])).id);
     const res = await as(ALICE, () => one<{ r: string }>(`select remove_fixed_income($1, '2026-10-20') as r`, [fid]));
     expect(res.r).toBe("deleted");
+  });
+});
+
+describe("pagamento de fatura: guarda no banco (migration 20261028000100)", () => {
+  const sched = (n: number) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ number: i + 1, invoice_ref: `2026-${10 + i}`, amount_cents: 10000 })));
+  async function setup(uid: string) {
+    const acc = await newAccount(uid, "Conta pgto", 500000);
+    const card = await as(uid, async () => (await one<{ id: string }>(`insert into cards (name, closing_day, due_day, payment_account_id) values ('Cartão pgto', 13, 20, $1) returning id`, [acc])).id);
+    await as(uid, () => q(`select create_credit_purchase($1, 'Compra', null, '2026-10-05', 30000, $2::jsonb)`, [card, sched(3)]));
+    return { acc, card };
+  }
+  const pay = (uid: string, card: string, acc: string, amount: number, key: string | null = null, ref = "2026-10", status = "confirmed") =>
+    as(uid, () => one<{ id: string }>(`select pay_invoice($1, $2, $3, $4, '2026-10-20', $5, $6) as id`, [card, ref, acc, amount, status, key]));
+
+  it("parcial, integral e excedente: nunca passa do devido", async () => {
+    const { acc, card } = await setup(ALICE);
+    await pay(ALICE, card, acc, 4000, "g-1");
+    await expect(pay(ALICE, card, acc, 6001, "g-2")).rejects.toThrow(/passa do que falta/);
+    await pay(ALICE, card, acc, 6000, "g-3");
+    await expect(pay(ALICE, card, acc, 1, "g-4")).rejects.toThrow(/já está quitada/);
+    // outras faturas da mesma compra continuam independentes
+    await pay(ALICE, card, acc, 10000, "g-5", "2026-11");
+    await expect(pay(ALICE, card, acc, 10001, "g-6", "2026-12")).rejects.toThrow(/passa do que falta/);
+    // estornar libera o valor de novo
+    const last = await pay(ALICE, card, acc, 10000, "g-7", "2026-12");
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [last.id]));
+    await pay(ALICE, card, acc, 10000, "g-8", "2026-12");
+    // pagamento agendado também conta (evita agendar duas vezes o mesmo valor)
+    const s2 = await setup(ALICE);
+    await pay(ALICE, s2.card, s2.acc, 10000, "s-1", "2026-10", "scheduled");
+    await expect(pay(ALICE, s2.card, s2.acc, 1, "s-2")).rejects.toThrow(/já está quitada/);
+  });
+
+  it("propriedade: cartão e conta de outro usuário (ou arquivada) são recusados", async () => {
+    const a = await setup(ALICE);
+    const b = await setup(BOB);
+    await expect(pay(BOB, a.card, b.acc, 100)).rejects.toThrow(/Cartão não encontrado/);
+    await expect(pay(BOB, b.card, a.acc, 100)).rejects.toThrow(/Conta não encontrada/);
+    await expect(pay(null as unknown as string, a.card, a.acc, 100)).rejects.toThrow();
+    await as(ALICE, () => q(`update accounts set archived_at = now() where id = $1`, [a.acc]));
+    await expect(pay(ALICE, a.card, a.acc, 100)).rejects.toThrow(/Conta não encontrada/);
+  });
+
+  it("valida situação, valor, fatura e data", async () => {
+    const { acc, card } = await setup(ALICE);
+    for (const status of ["expected", "foo", ""]) await expect(pay(ALICE, card, acc, 100, null, "2026-10", status)).rejects.toThrow(/Situação/);
+    await expect(pay(ALICE, card, acc, 0)).rejects.toThrow(/positivo/);
+    await expect(pay(ALICE, card, acc, -5)).rejects.toThrow(/positivo/);
+    for (const ref of ["2026-13", "26-10", "2026-10-01", "x"]) await expect(pay(ALICE, card, acc, 100, null, ref)).rejects.toThrow(/Fatura inválida/);
+    await expect(as(ALICE, () => q(`select pay_invoice($1, '2026-10', $2, 100, null)`, [card, acc]))).rejects.toThrow(/Data/);
+    await expect(pay(ALICE, card, acc, 100, "x".repeat(101))).rejects.toThrow(/Chave/);
+  });
+
+  it("idempotência consistente: mesma chave = mesmo pedido; outro pedido, outra operação ou pagamento estornado são recusados", async () => {
+    const { acc, card } = await setup(ALICE);
+    const p = await pay(ALICE, card, acc, 3000, "i-1");
+    expect((await pay(ALICE, card, acc, 3000, "i-1")).id).toBe(p.id);
+    await expect(pay(ALICE, card, acc, 3001, "i-1")).rejects.toThrow(/outra operação/); // valor diferente
+    await expect(pay(ALICE, card, acc, 3000, "i-1", "2026-11")).rejects.toThrow(/outra operação/); // outra fatura
+    const acc2 = await newAccount(ALICE, "Outra conta", 100000);
+    await expect(pay(ALICE, card, acc2, 3000, "i-1")).rejects.toThrow(/outra operação/); // outra conta
+    // chave de um lançamento que não é pagamento de fatura
+    await as(ALICE, () => q(`insert into account_entries (account_id, kind, status, amount_cents, occurred_on, idempotency_key) values ($1, 'expense', 'confirmed', -100, '2026-10-02', 'invpay:t')`, [acc]));
+    await expect(pay(ALICE, card, acc, 100, "invpay:t")).rejects.toThrow(/outra operação/);
+    // depois do estorno a mesma chave não ressuscita o pagamento
+    await as(ALICE, () => q(`select reverse_invoice_payment($1)`, [p.id]));
+    await expect(pay(ALICE, card, acc, 3000, "i-1")).rejects.toThrow(/estornado/);
+    // e a chave é por usuário: outro usuário pode usar o mesmo texto
+    const b = await setup(BOB);
+    await pay(BOB, b.card, b.acc, 3000, "i-1");
   });
 });
 
